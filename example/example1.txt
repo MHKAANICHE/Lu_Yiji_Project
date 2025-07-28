@@ -1,0 +1,407 @@
+//+------------------------------------------------------------------+
+//|                                             DASHBOARD PART 1.mq5 |
+//|                                  Copyright 2024, MetaQuotes Ltd. |
+//|                                             https://www.mql5.com |
+//+------------------------------------------------------------------+
+#property copyright "Copyright 2024, MetaQuotes Ltd."
+#property link      "https://www.mql5.com"
+#property version   "1.00"
+
+//--- DEFINE MACRO PROPERTIES
+
+#define MAIN_REC "MAIN_REC"
+#define MAIN_SUB_REC "MAIN_SUB_REC"
+#define MAIN_LINE_UP "MAIN_LINE_UP"
+#define MAIN_LINE_DN "MAIN_LINE_DN"
+#define LABEL_NAME "LABEL_NAME"
+#define ICON_HEART "ICON_HEART"
+#define ICON_TOOL "ICON_TOOL"
+#define ICON_CAR "ICON_CAR"
+#define LINE1 "LINE1"
+#define BTN_CLOSE "BTN_CLOSE"
+#define BTN_MARKET "BTN_MARKET"
+#define BTN_PROFIT "BTN_PROFIT"
+#define BTN_LOSS "BTN_LOSS"
+#define BTN_PENDING "BTN_PENDING"
+#define LINE2 "LINE2"
+
+#define BTN_LOTS "BTN_LOTS"
+#define LABEL_LOTS "LABEL_LOTS"
+#define ICON_DROP_DN1 "ICON_DROP_DN1"
+#define EDIT_LOTS "EDIT_LOTS"
+#define BTN_P1 "BTN_P1"
+#define BTN_M1 "BTN_M1"
+
+#define BTN_SL "BTN_SL"
+#define LABEL_SL "LABEL_SL"
+#define ICON_DROP_DN2 "ICON_DROP_DN2"
+#define EDIT_SL "EDIT_SL"
+#define BTN_P2 "BTN_P2"
+#define BTN_M2 "BTN_M2"
+
+#define BTN_TP "BTN_TP"
+#define LABEL_TP "LABEL_TP"
+#define ICON_DROP_DN3 "ICON_DROP_DN3"
+#define EDIT_TP "EDIT_TP"
+#define BTN_P3 "BTN_P3"
+#define BTN_M3 "BTN_M3"
+
+#define BTN_BUY "BTN_BUY"
+#define LABEL_BUY "LABEL_BUY"
+#define LABEL_BUY_PRICE "LABEL_BUY_PRICE"
+#define BTN_OVERLAY "BTN_OVERLAY"
+#define BTN_SPREAD "BTN_SPREAD"
+
+#define BTN_SELL "BTN_SELL"
+#define LABEL_SELL "LABEL_SELL"
+#define LABEL_SELL_PRICE "LABEL_SELL_PRICE"
+
+#define BTN_CONTACT "BTN_CONTACT"
+
+#define BTN_SHARP "BTN_SHARP"
+#define LABEL_SHARP "LABEL_SHARP"
+#define BTN_HOVER "BTN_HOVER"
+#define LABEL_HOVER "LABEL_HOVER"
+
+#define LABEL_EXTRA1 "LABEL_EXTRA1"
+#define LABEL_EXTRA2 "LABEL_EXTRA2"
+#define LABEL_EXTRA3 "LABEL_EXTRA3"
+#define LABEL_EXTRA4 "LABEL_EXTRA4"
+
+#define BTN_DROP_DN "BTN_DROP_DN"
+#define LABEL_OPT1 "LABEL_OPT1"
+#define LABEL_OPT2 "LABEL_OPT2"
+#define LABEL_OPT3 "LABEL_OPT3"
+#define ICON_DRAG "ICON_DRAG"
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+
+int OnInit(){
+
+   createRecLabel(MAIN_REC,10,30,250,400,clrWhite,1,clrBlack);
+   createRecLabel(MAIN_SUB_REC,15,35,240,390,C'245,245,245',1,clrNONE);
+   createRecLabel(MAIN_LINE_UP,15,35,240,1,C'245,245,245',1,clrNONE,BORDER_RAISED);
+   createRecLabel(MAIN_LINE_DN,15,35-1,1,390+1,C'245,245,245',1,clrNONE,BORDER_RAISED);
+
+   createLabel(LABEL_NAME,25,35,"DashBoard v1.0",clrBlue,14,"Cooper Black");
+   
+   createLabel(ICON_HEART,190,35,"Y",clrRed,15,"Webdings");
+   createLabel(ICON_TOOL,210,35,"@",clrBlue,15,"Webdings");
+   createLabel(ICON_CAR,230,35,"h",clrBlack,15,"Webdings");
+   createRecLabel(LINE1,15+10,60,240-10,1,C'245,245,245',1,clrNONE,BORDER_RAISED);
+   createLabel(BTN_CLOSE,25,65,"Close",clrBlack,13,"Impact");
+   createLabel(BTN_MARKET,70,65,"Market",clrDarkRed,13,"Impact");
+   createLabel(BTN_PROFIT,125,65,"Profit",clrGreen,13,"Impact");
+   createLabel(BTN_LOSS,170,65,"Loss",clrRed,13,"Impact");
+   createLabel(BTN_PENDING,205,65,"Pend'n",clrDarkGray,13,"Impact");
+   createRecLabel(LINE2,15+10,87,240-10,1,C'245,245,245',1,clrNONE,BORDER_RAISED);
+   
+   createButton(BTN_LOTS,25,95,130,25,"",clrBlack,12,C'210,210,210',C'150,150,150');
+   createLabel(LABEL_LOTS,25+10,95+5,"LotSize",clrBlack,9);
+   //createLabel(ICON_DROP_DN1,150,75,CharToString(100),clrBlack,12,"Wingdings");
+   createLabel(ICON_DROP_DN1,130,95+5,CharToString(240),C'070,070,070',20,"Wingdings 3");
+   createEdit(EDIT_LOTS,165,95,60,25,"0.01",clrBlack,14,clrWhite,C'100,100,100',"Callibri");
+   createButton(BTN_P1,225,95,20,12,"5",clrBlack,12,clrLightGray,C'100,100,100',"Webdings");
+   createButton(BTN_M1,225,95+12,20,12,"6",clrBlack,12,clrLightGray,C'100,100,100',"Webdings");
+
+   createButton(BTN_SL,25,95+30,130,25,"",clrBlack,12,C'210,210,210',C'150,150,150');
+   createLabel(LABEL_SL,35,95+30,"SL Pips",clrBlack,14);
+   createLabel(ICON_DROP_DN2,130,100+30,CharToString(240),C'070,070,070',20,"Wingdings 3");
+   createEdit(EDIT_SL,165,95+30,60,25,"100.0",clrBlack,13,clrWhite,C'100,100,100',"Callibri");
+   createButton(BTN_P2,225,95+30,20,12,"5",clrBlack,12,clrLightGray,C'100,100,100',"Webdings");
+   createButton(BTN_M2,225,107+30,20,12,"6",clrBlack,12,clrLightGray,C'100,100,100',"Webdings");
+
+   createButton(BTN_TP,25,95+30+30,130,25,"",clrBlack,12,C'210,210,210',C'150,150,150');
+   createLabel(LABEL_TP,35,95+30+30,"TP Pips",clrBlack,14);
+   createLabel(ICON_DROP_DN3,130,100+30+30,CharToString(240),C'070,070,070',20,"Wingdings 3");
+   createEdit(EDIT_TP,165,95+30+30,60,25,"100.0",clrBlack,13,clrWhite,C'100,100,100',"Callibri");
+   createButton(BTN_P3,225,95+30+30,20,12,"5",clrBlack,12,clrLightGray,C'100,100,100',"Webdings");
+   createButton(BTN_M3,225,107+30+30,20,12,"6",clrBlack,12,clrLightGray,C'100,100,100',"Webdings");
+   
+   createRecLabel(BTN_SELL,25,335,105,60,clrRed,1,clrNONE);
+   createLabel(LABEL_SELL,35,335,"Sell",clrWhite,15,"ARIAL black");
+   createLabel(LABEL_SELL_PRICE,35,335+30,DoubleToString(Bid(),_Digits),clrWhite,13,"ARIAL black");
+   createRecLabel(BTN_BUY,140,335,105,60,clrGreen,1,clrNONE);
+   createLabel(LABEL_BUY,150+35,335,"Buy",clrWhite,15,"ARIAL black");
+   createLabel(LABEL_BUY_PRICE,150,335+30,DoubleToString(Ask(),_Digits),clrWhite,13,"ARIAL black");
+   createRecLabel(BTN_OVERLAY,90,335,90,25,C'245,245,245',0,clrNONE);
+   createButton(BTN_SPREAD,95,335,80,20,(string)Spread(),clrBlack,13,clrWhite,clrBlack);
+   createButton(BTN_CONTACT,25,335+62,230-10,25,"https://t.me/Forex_Algo_Trader",clrBlack,10,clrNONE,clrBlack);
+   
+   createRecLabel(BTN_SHARP,25,190,220,35,C'220,220,220',2,C'100,100,100');
+   createLabel(LABEL_SHARP,25+20,190+5,"Sharp Edged Button",clrBlack,12,"ARIAL black");
+   //createRecLabel(BTN_HOVER,25,230,220,35,C'220,220,220',3,C'050,050,255');
+   createRecLabel(BTN_HOVER,25,230,220,35,C'220,220,220',3,C'100,100,100');
+   createLabel(LABEL_HOVER,25+50,230+5,"Hover Effect",clrBlack,12,"ARIAL black");
+
+   createLabel(LABEL_EXTRA1,25,290,"_",clrBlack,25,"WEBDINGS");
+   createLabel(LABEL_EXTRA2,25+40,290,"J",clrBlack,25,"WINGDINGS");
+   createLabel(LABEL_EXTRA3,25+40+40,290,"{",clrBlack,25,"WINGDINGS 2");
+   createLabel(LABEL_EXTRA4,25+40+40+40,290,"G",clrBlack,25,"WINGDINGS 3");
+   
+   // createDropDown();
+   
+   return(INIT_SUCCEEDED);
+}
+
+double Ask(){return(NormalizeDouble(SymbolInfoDouble(_Symbol,SYMBOL_ASK),_Digits));}
+double Bid(){return(NormalizeDouble(SymbolInfoDouble(_Symbol,SYMBOL_BID),_Digits));}
+int Spread(){return((int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD));}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason){
+//---
+   destroyPanel();
+}
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick(){
+
+}
+//+------------------------------------------------------------------+
+
+
+//+------------------------------------------------------------------+
+//|     Function to create rectangle label                           |
+//+------------------------------------------------------------------+
+
+bool createRecLabel(string objName, int xD, int yD, int xS, int yS,
+                    color clrBg, int widthBorder, color clrBorder = clrNONE,
+                    ENUM_BORDER_TYPE borderType = BORDER_FLAT, ENUM_LINE_STYLE borderStyle = STYLE_SOLID) {
+    ResetLastError(); // Reset any previous error codes
+    
+    // Create a rectangle label object
+    if (!ObjectCreate(0, objName, OBJ_RECTANGLE_LABEL, 0, 0, 0)) {
+        Print(__FUNCTION__, ": failed to create rec label! Error code = ", _LastError);
+        return (false); // Return false if object creation fails
+    }
+    
+    // Set properties for the rectangle label
+    ObjectSetInteger(0, objName, OBJPROP_XDISTANCE, xD); // X distance from the corner
+    ObjectSetInteger(0, objName, OBJPROP_YDISTANCE, yD); // Y distance from the corner
+    ObjectSetInteger(0, objName, OBJPROP_XSIZE, xS); // Width of the rectangle
+    ObjectSetInteger(0, objName, OBJPROP_YSIZE, yS); // Height of the rectangle
+    ObjectSetInteger(0, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER); // Positioning corner
+    ObjectSetInteger(0, objName, OBJPROP_BGCOLOR, clrBg); // Rectangle background color
+    ObjectSetInteger(0, objName, OBJPROP_BORDER_TYPE, borderType); // Border type
+    ObjectSetInteger(0, objName, OBJPROP_STYLE, borderStyle); // Border style (only if borderType is flat)
+    ObjectSetInteger(0, objName, OBJPROP_WIDTH, widthBorder); // Border width (only if borderType is flat)
+    ObjectSetInteger(0, objName, OBJPROP_COLOR, clrBorder); // Border color (only if borderType is flat)
+    ObjectSetInteger(0, objName, OBJPROP_BACK, false); // Not a background object
+    ObjectSetInteger(0, objName, OBJPROP_STATE, false); // Not selectable
+    ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false); // Not selectable
+    ObjectSetInteger(0, objName, OBJPROP_SELECTED, false); // Not selected
+    
+    ChartRedraw(0); // Redraw the chart
+    
+    return (true); // Return true if object creation and property settings are successful
+}
+
+//+------------------------------------------------------------------+
+//|     Function to create button                                    |
+//+------------------------------------------------------------------+
+
+bool createButton(string objName, int xD, int yD, int xS, int yS,
+                  string txt = "", color clrTxt = clrBlack, int fontSize = 12,
+                  color clrBg = clrNONE, color clrBorder = clrNONE,
+                  string font = "Arial Rounded MT Bold") {
+    // Reset any previous errors
+    ResetLastError();
+
+    // Attempt to create the button object
+    if (!ObjectCreate(0, objName, OBJ_BUTTON, 0, 0, 0)) {
+        // Print an error message if creation fails
+        Print(__FUNCTION__, ": failed to create the button! Error code = ", _LastError);
+        return (false);
+    }
+
+    // Set properties for the button
+    ObjectSetInteger(0, objName, OBJPROP_XDISTANCE, xD); // X distance from the corner
+    ObjectSetInteger(0, objName, OBJPROP_YDISTANCE, yD); // Y distance from the corner
+    ObjectSetInteger(0, objName, OBJPROP_XSIZE, xS); // Width of the button
+    ObjectSetInteger(0, objName, OBJPROP_YSIZE, yS); // Height of the button
+    ObjectSetInteger(0, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER); // Positioning corner
+    ObjectSetString(0, objName, OBJPROP_TEXT, txt); // Text displayed on the button
+    ObjectSetInteger(0, objName, OBJPROP_COLOR, clrTxt); // Text color
+    ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, fontSize); // Font size
+    ObjectSetString(0, objName, OBJPROP_FONT, font); // Font name
+    ObjectSetInteger(0, objName, OBJPROP_BGCOLOR, clrBg); // Background color
+    ObjectSetInteger(0, objName, OBJPROP_BORDER_COLOR, clrBorder); // Border color
+    ObjectSetInteger(0, objName, OBJPROP_BACK, false); // Transparent background
+    ObjectSetInteger(0, objName, OBJPROP_STATE, false); // Button state (not pressed)
+    ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false); // Not selectable
+    ObjectSetInteger(0, objName, OBJPROP_SELECTED, false); // Not selected
+
+    // Redraw the chart to display the button
+    ChartRedraw(0);
+
+    return (true); // Button creation successful
+}
+
+//+------------------------------------------------------------------+
+//|     Function to create edit field                                |
+//+------------------------------------------------------------------+
+
+bool createEdit(string objName, int xD, int yD, int xS, int yS,
+                string txt = "", color clrTxt = clrBlack, int fontSize = 12,
+                color clrBg = clrNONE, color clrBorder = clrNONE,
+                string font = "Arial Rounded MT Bold") {
+    // Reset any previous errors
+    ResetLastError();
+
+    // Attempt to create the edit object
+    if (!ObjectCreate(0, objName, OBJ_EDIT, 0, 0, 0)) {
+        // Print an error message if creation fails
+        Print(__FUNCTION__, ": failed to create the edit! Error code = ", _LastError);
+        return (false);
+    }
+
+    // Set properties for the edit field
+    ObjectSetInteger(0, objName, OBJPROP_XDISTANCE, xD); // X distance from the corner
+    ObjectSetInteger(0, objName, OBJPROP_YDISTANCE, yD); // Y distance from the corner
+    ObjectSetInteger(0, objName, OBJPROP_XSIZE, xS); // Width of the edit field
+    ObjectSetInteger(0, objName, OBJPROP_YSIZE, yS); // Height of the edit field
+    ObjectSetInteger(0, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER); // Positioning corner
+    ObjectSetString(0, objName, OBJPROP_TEXT, txt); // Default text in the edit field
+    ObjectSetInteger(0, objName, OBJPROP_COLOR, clrTxt); // Text color
+    ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, fontSize); // Font size
+    ObjectSetString(0, objName, OBJPROP_FONT, font); // Font name
+    ObjectSetInteger(0, objName, OBJPROP_BGCOLOR, clrBg); // Background color
+    ObjectSetInteger(0, objName, OBJPROP_BORDER_COLOR, clrBorder); // Border color
+    ObjectSetInteger(0, objName, OBJPROP_ALIGN, ALIGN_LEFT); // Text alignment (left-aligned)
+    ObjectSetInteger(0, objName, OBJPROP_READONLY, false); // Edit field is not read-only
+    ObjectSetInteger(0, objName, OBJPROP_BACK, false); // Transparent background
+    ObjectSetInteger(0, objName, OBJPROP_STATE, false); // Edit field state (not active)
+    ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false); // Not selectable
+    ObjectSetInteger(0, objName, OBJPROP_SELECTED, false); // Not selected
+
+    // Redraw the chart to display the edit field
+    ChartRedraw(0);
+
+    return (true); // Edit field creation successful
+}
+
+//+------------------------------------------------------------------+
+//|     Function to create text label                                |
+//+------------------------------------------------------------------+
+
+bool createLabel(string objName, int xD, int yD,
+                 string txt, color clrTxt = clrBlack, int fontSize = 12,
+                 string font = "Arial Rounded MT Bold") {
+    // Reset any previous errors
+    ResetLastError();
+
+    // Attempt to create the label object
+    if (!ObjectCreate(0, objName, OBJ_LABEL, 0, 0, 0)) {
+        // Print an error message if creation fails
+        Print(__FUNCTION__, ": failed to create the label! Error code = ", _LastError);
+        return (false);
+    }
+
+    // Set properties for the label
+    ObjectSetInteger(0, objName, OBJPROP_XDISTANCE, xD); // X distance from the corner
+    ObjectSetInteger(0, objName, OBJPROP_YDISTANCE, yD); // Y distance from the corner
+    ObjectSetInteger(0, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER); // Positioning corner
+    ObjectSetString(0, objName, OBJPROP_TEXT, txt); // Text displayed on the label
+    ObjectSetInteger(0, objName, OBJPROP_COLOR, clrTxt); // Text color
+    ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, fontSize); // Font size
+    ObjectSetString(0, objName, OBJPROP_FONT, font); // Font name
+    ObjectSetInteger(0, objName, OBJPROP_BACK, false); // Transparent background
+    ObjectSetInteger(0, objName, OBJPROP_STATE, false); // Label state (not active)
+    ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false); // Not selectable
+    ObjectSetInteger(0, objName, OBJPROP_SELECTED, false); // Not selected
+
+    // Redraw the chart to display the label
+    ChartRedraw(0);
+
+    return (true); // Label creation successful
+}
+
+//+------------------------------------------------------------------+
+//|     Function to create the drop down utilities                   |
+//+------------------------------------------------------------------+
+
+void createDropDown(){
+   createRecLabel(BTN_DROP_DN,25,95+25,130,70,clrWhite,2,clrBlack);
+   createLabel(LABEL_OPT1,25+10,95+25,"LotSize",clrBlack,12,"stencil");
+   createLabel(LABEL_OPT2,25+10,95+25+20,"Risk Percent %",clrBlack,12,"calibri Italic");
+   createLabel(LABEL_OPT3,25+10,95+25+20+20,"Money Balance",clrBlack,12,"Arial bold");
+   createLabel(ICON_DRAG,25+10+95,95+25,"d",clrRoyalBlue,15,"webdings");
+}
+
+//+------------------------------------------------------------------+
+//|    Function to destroy the entire GUI Panel                      |
+//+------------------------------------------------------------------+
+
+void destroyPanel(){
+   ObjectDelete(0,MAIN_REC);
+   ObjectDelete(0,MAIN_SUB_REC);
+   ObjectDelete(0,MAIN_LINE_UP);
+   ObjectDelete(0,MAIN_LINE_DN);
+   ObjectDelete(0,BTN_LOTS);
+   ObjectDelete(0,LABEL_NAME);
+   ObjectDelete(0,LABEL_LOTS);
+   ObjectDelete(0,ICON_HEART);
+   ObjectDelete(0,ICON_TOOL);
+   ObjectDelete(0,ICON_CAR);
+   ObjectDelete(0,ICON_DROP_DN1);
+   ObjectDelete(0,LINE1);
+   ObjectDelete(0,BTN_CLOSE);
+   ObjectDelete(0,BTN_MARKET);
+   ObjectDelete(0,BTN_PROFIT);
+   ObjectDelete(0,BTN_LOSS);
+   ObjectDelete(0,BTN_PENDING);
+   ObjectDelete(0,LINE2);
+   ObjectDelete(0,EDIT_LOTS);
+   ObjectDelete(0,BTN_P1);
+   ObjectDelete(0,BTN_M1);
+   
+   ObjectDelete(0,BTN_SL);
+   ObjectDelete(0,LABEL_SL);
+   ObjectDelete(0,ICON_DROP_DN2);
+   ObjectDelete(0,EDIT_SL);
+   ObjectDelete(0,BTN_P2);
+   ObjectDelete(0,BTN_M2);
+   
+   ObjectDelete(0,BTN_TP);
+   ObjectDelete(0,LABEL_TP);
+   ObjectDelete(0,ICON_DROP_DN3);
+   ObjectDelete(0,EDIT_TP);
+   ObjectDelete(0,BTN_P3);
+   ObjectDelete(0,BTN_M3);
+   
+   ObjectDelete(0,BTN_BUY);
+   ObjectDelete(0,LABEL_BUY);
+   ObjectDelete(0,LABEL_BUY_PRICE);
+   ObjectDelete(0,BTN_OVERLAY);
+   ObjectDelete(0,BTN_SPREAD);
+   
+   ObjectDelete(0,BTN_SELL);
+   ObjectDelete(0,LABEL_SELL);
+   ObjectDelete(0,LABEL_SELL_PRICE);
+   
+   ObjectDelete(0,BTN_CONTACT);
+   
+   ObjectDelete(0,BTN_SHARP);
+   ObjectDelete(0,LABEL_SHARP);
+   ObjectDelete(0,BTN_HOVER);
+   ObjectDelete(0,LABEL_HOVER);
+   
+   ObjectDelete(0,LABEL_EXTRA1);
+   ObjectDelete(0,LABEL_EXTRA2);
+   ObjectDelete(0,LABEL_EXTRA3);
+   ObjectDelete(0,LABEL_EXTRA4);
+   
+   ObjectDelete(0,BTN_DROP_DN);
+   ObjectDelete(0,LABEL_OPT1);
+   ObjectDelete(0,LABEL_OPT2);
+   ObjectDelete(0,LABEL_OPT3);
+   ObjectDelete(0,ICON_DRAG);
+   
+   ChartRedraw(0);
+}
