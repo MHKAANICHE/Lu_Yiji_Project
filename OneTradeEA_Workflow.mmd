@@ -1,0 +1,44 @@
+```mermaid
+flowchart TD
+    Start((Start / OnInit))
+    InitPanel(Initialize GUI Panel & Inputs)
+    WaitTick(Wait for OnTick)
+    ValidateInputs{Inputs Valid?}
+    ShowError(Show Error / Await User)
+    AtOpenTime{Is Open Time?}
+    OpenTrade(Open First Trade)
+    MonitorTrades(Monitor Trades (SL/TP))
+    SLHit{SL Hit?}
+    TPHit{TP Hit?}
+    ReplaceAllowed{Replacements Left?}
+    ReplaceTrade(Open Replacement Trade)
+    NoReplace(No More Replacements)
+    AtCloseTime{Is Close Time?}
+    CloseAll(Close All Positions & Orders)
+    ResetDay(New Day: Reset State)
+    End((End / OnDeinit))
+
+    Start --> InitPanel
+    InitPanel --> WaitTick
+    WaitTick --> ValidateInputs
+    ValidateInputs -- No --> ShowError
+    ValidateInputs -- Yes --> AtOpenTime
+    ShowError --> WaitTick
+    AtOpenTime -- No --> AtCloseTime
+    AtOpenTime -- Yes --> OpenTrade
+    OpenTrade --> MonitorTrades
+    MonitorTrades --> SLHit
+    SLHit -- Yes --> ReplaceAllowed
+    SLHit -- No --> TPHit
+    TPHit -- Yes --> NoReplace
+    TPHit -- No --> AtCloseTime
+    ReplaceAllowed -- Yes --> ReplaceTrade
+    ReplaceAllowed -- No --> NoReplace
+    ReplaceTrade --> MonitorTrades
+    NoReplace --> AtCloseTime
+    AtCloseTime -- Yes --> CloseAll
+    AtCloseTime -- No --> ResetDay
+    CloseAll --> ResetDay
+    ResetDay --> WaitTick
+    WaitTick --> End
+```

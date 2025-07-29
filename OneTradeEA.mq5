@@ -309,92 +309,9 @@ int OnInit()
    mainPanel.SetTWEnd(InpWindowEnd);
    mainPanel.ValidateInputs();
 
-   // Create chart objects for all UI elements
-   // Mode input (Buy/Sell)
-   ObjectCreate(0, "ModeInput", OBJ_EDIT, 0, 0, 0);
-   ObjectSetInteger(0, "ModeInput", OBJPROP_XDISTANCE, 30);
-   ObjectSetInteger(0, "ModeInput", OBJPROP_YDISTANCE, 30);
-   ObjectSetInteger(0, "ModeInput", OBJPROP_WIDTH, 80);
-   ObjectSetString(0, "ModeInput", OBJPROP_TEXT, (InpTradeMode == ORDER_TYPE_BUY ? "Buy" : "Sell"));
+   // Render all graphical/chart objects via InterfaceGui
+   mainPanel.RenderUI();
 
-   // Lot input
-   ObjectCreate(0, "LotInput", OBJ_EDIT, 0, 0, 0);
-   ObjectSetInteger(0, "LotInput", OBJPROP_XDISTANCE, 120);
-   ObjectSetInteger(0, "LotInput", OBJPROP_YDISTANCE, 30);
-   ObjectSetInteger(0, "LotInput", OBJPROP_WIDTH, 80);
-   ObjectSetString(0, "LotInput", OBJPROP_TEXT, DoubleToString(InpLotSize,2));
-
-   // SL input
-   ObjectCreate(0, "SLInput", OBJ_EDIT, 0, 0, 0);
-   ObjectSetInteger(0, "SLInput", OBJPROP_XDISTANCE, 210);
-   ObjectSetInteger(0, "SLInput", OBJPROP_YDISTANCE, 30);
-   ObjectSetInteger(0, "SLInput", OBJPROP_WIDTH, 80);
-   ObjectSetString(0, "SLInput", OBJPROP_TEXT, IntegerToString(InpStopLoss));
-
-   // RR input
-   ObjectCreate(0, "RRInput", OBJ_EDIT, 0, 0, 0);
-   ObjectSetInteger(0, "RRInput", OBJPROP_XDISTANCE, 300);
-   ObjectSetInteger(0, "RRInput", OBJPROP_YDISTANCE, 30);
-   ObjectSetInteger(0, "RRInput", OBJPROP_WIDTH, 80);
-   ObjectSetString(0, "RRInput", OBJPROP_TEXT, DoubleToString(InpRiskValue,2));
-
-   // Open time input
-   ObjectCreate(0, "OpenTimeInput", OBJ_EDIT, 0, 0, 0);
-   ObjectSetInteger(0, "OpenTimeInput", OBJPROP_XDISTANCE, 390);
-   ObjectSetInteger(0, "OpenTimeInput", OBJPROP_YDISTANCE, 30);
-   ObjectSetInteger(0, "OpenTimeInput", OBJPROP_WIDTH, 80);
-   ObjectSetString(0, "OpenTimeInput", OBJPROP_TEXT, InpOpenTime);
-
-   // Close time input
-   ObjectCreate(0, "CloseTimeInput", OBJ_EDIT, 0, 0, 0);
-   ObjectSetInteger(0, "CloseTimeInput", OBJPROP_XDISTANCE, 480);
-   ObjectSetInteger(0, "CloseTimeInput", OBJPROP_YDISTANCE, 30);
-   ObjectSetInteger(0, "CloseTimeInput", OBJPROP_WIDTH, 80);
-   ObjectSetString(0, "CloseTimeInput", OBJPROP_TEXT, InpCloseTime);
-
-   // Replace input
-   ObjectCreate(0, "ReplaceInput", OBJ_EDIT, 0, 0, 0);
-   ObjectSetInteger(0, "ReplaceInput", OBJPROP_XDISTANCE, 570);
-   ObjectSetInteger(0, "ReplaceInput", OBJPROP_YDISTANCE, 30);
-   ObjectSetInteger(0, "ReplaceInput", OBJPROP_WIDTH, 80);
-   ObjectSetString(0, "ReplaceInput", OBJPROP_TEXT, IntegerToString(InpMaxReplacements));
-
-   // Time window input
-   ObjectCreate(0, "TimeWindowInput", OBJ_EDIT, 0, 0, 0);
-   ObjectSetInteger(0, "TimeWindowInput", OBJPROP_XDISTANCE, 660);
-   ObjectSetInteger(0, "TimeWindowInput", OBJPROP_YDISTANCE, 30);
-   ObjectSetInteger(0, "TimeWindowInput", OBJPROP_WIDTH, 80);
-   ObjectSetString(0, "TimeWindowInput", OBJPROP_TEXT, InpWindowStart);
-
-   // Start EA button
-   ObjectCreate(0, "StartEAButton", OBJ_BUTTON, 0, 0, 0);
-   ObjectSetInteger(0, "StartEAButton", OBJPROP_XDISTANCE, 30);
-   ObjectSetInteger(0, "StartEAButton", OBJPROP_YDISTANCE, 70);
-   ObjectSetInteger(0, "StartEAButton", OBJPROP_WIDTH, 120);
-   ObjectSetString(0, "StartEAButton", OBJPROP_TEXT, "Start EA");
-
-   // Replace order button
-   ObjectCreate(0, "ReplaceOrderButton", OBJ_BUTTON, 0, 0, 0);
-   ObjectSetInteger(0, "ReplaceOrderButton", OBJPROP_XDISTANCE, 160);
-   ObjectSetInteger(0, "ReplaceOrderButton", OBJPROP_YDISTANCE, 70);
-   ObjectSetInteger(0, "ReplaceOrderButton", OBJPROP_WIDTH, 120);
-   ObjectSetString(0, "ReplaceOrderButton", OBJPROP_TEXT, "Replace Order");
-
-   // Status label
-   ObjectCreate(0, "StatusLabel", OBJ_LABEL, 0, 0, 0);
-   ObjectSetInteger(0, "StatusLabel", OBJPROP_XDISTANCE, 300);
-   ObjectSetInteger(0, "StatusLabel", OBJPROP_YDISTANCE, 70);
-   ObjectSetInteger(0, "StatusLabel", OBJPROP_WIDTH, 440);
-   ObjectSetString(0, "StatusLabel", OBJPROP_TEXT, mainPanel.GetStatus());
-
-   // Reset button
-   ObjectCreate(0, "ResetButton", OBJ_BUTTON, 0, 0, 0);
-   ObjectSetInteger(0, "ResetButton", OBJPROP_XDISTANCE, 180);
-   ObjectSetInteger(0, "ResetButton", OBJPROP_YDISTANCE, 30);
-   ObjectSetInteger(0, "ResetButton", OBJPROP_WIDTH, 120);
-   ObjectSetString(0, "ResetButton", OBJPROP_TEXT, "Reset");
-
-   ChartRedraw(0);
    logger.Log("Initialized. Magic: " + Symbol() + "_OneTradeEA");
    return(INIT_SUCCEEDED);
   }

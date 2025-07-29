@@ -48,6 +48,62 @@ This Expert Advisor (EA) implements the full requirements specified by the clien
 4. Run the EA and monitor status/comments on the chart.
 5. Review CSV logs for trade history and results.
 
+## Main Files Breakdown
+
+- `OneTradeEA.mq5`: Main EA script. Handles EA lifecycle (`OnInit`, `OnTick`, `OnDeinit`), UI creation, event wiring, and calls core logic methods. Delegates event handling to `EventHandler.mqh`.
+- `OneTradeEA_Core.mqh`: Implements the core trading logic in the `COneTradeEA_Core` class. Manages trade parameters, time windows, CSV logging, trade execution, monitoring, replacements, and closing.
+- `InterfaceGui.mqh`: Defines the logical GUI interface (`CInterfaceGui`). Holds user input state, provides setters/getters, and input validation. No chart object code; only logical representation.
+- `EventHandler.mqh`: Handles UI events and input validation. Implements input validation, status display, and main event handler (`OnChartEvent`) for button clicks and input changes, updating the main panel and triggering core EA logic.
+
+## Workflow Diagram
+
+The following Mermaid diagram illustrates the EA's workflow:
+
+```mermaid
+flowchart TD
+    Start((Start / OnInit))
+    InitPanel(Initialize GUI Panel & Inputs)
+    WaitTick(Wait for OnTick)
+    ValidateInputs{Inputs Valid?}
+    ShowError(Show Error / Await User)
+    AtOpenTime{Is Open Time?}
+    OpenTrade(Open First Trade)
+    MonitorTrades(Monitor Trades - SL/TP)
+    SLHit{SL Hit?}
+    TPHit{TP Hit?}
+    ReplaceAllowed{Replacements Left?}
+    ReplaceTrade(Open Replacement Trade)
+    NoReplace(No More Replacements)
+    AtCloseTime{Is Close Time?}
+    CloseAll(Close All Positions & Orders)
+    ResetDay(New Day: Reset State)
+    End((End / OnDeinit))
+
+    Start --> InitPanel
+    InitPanel --> WaitTick
+    WaitTick --> ValidateInputs
+    ValidateInputs -- No --> ShowError
+    ValidateInputs -- Yes --> AtOpenTime
+    ShowError --> WaitTick
+    AtOpenTime -- No --> AtCloseTime
+    AtOpenTime -- Yes --> OpenTrade
+    OpenTrade --> MonitorTrades
+    MonitorTrades --> SLHit
+    SLHit -- Yes --> ReplaceAllowed
+    SLHit -- No --> TPHit
+    TPHit -- Yes --> NoReplace
+    TPHit -- No --> AtCloseTime
+    ReplaceAllowed -- Yes --> ReplaceTrade
+    ReplaceAllowed -- No --> NoReplace
+    ReplaceTrade --> MonitorTrades
+    NoReplace --> AtCloseTime
+    AtCloseTime -- Yes --> CloseAll
+    AtCloseTime -- No --> ResetDay
+    CloseAll --> ResetDay
+    ResetDay --> WaitTick
+    WaitTick --> End
+```
+
 ## Client Requirements Coverage
 
 All requirements from the client specification are fully implemented and validated in the codebase.
