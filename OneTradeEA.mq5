@@ -44,9 +44,8 @@ string TimeToStr(datetime t, int mode=0) {
 //--- Input parameters
 input ENUM_ORDER_TYPE   InpTradeMode = ORDER_TYPE_BUY; // Trade Mode (Buy/Sell)
 input double            InpLotSize   = 0.10;           // Lot Size
-input int               InpStopLoss  = 20;             // Stop Loss (pips)
-input double            InpRiskValue = 1.00;           // Risk [1] (value)
-input double            InpRewardValue = 2.00;         // Reward [2] (value)
+input double            InpRiskValue = 1.00;           // Risk Amount ($) - The maximum dollar amount you are willing to risk per trade
+input double            InpRewardValue = 2.00;         // Risk:Reward Ratio (e.g., 2 for 1:2)
 input string            InpOpenTime  = "09:00:00";     // Opening Time (HH:MM:SS)
 input string            InpCloseTime = "17:00:00";     // Closing Time (HH:MM:SS)
 input int               InpMaxReplacements = 2;        // Max Replacements
@@ -170,8 +169,18 @@ COneTradeEA_Core coreEA_instance;
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   // Validate lot size
+   double minLot = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_MIN);
+   double maxLot = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_MAX);
+   double lotStep = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
+   if(InpLotSize < minLot || InpLotSize > maxLot || fmod(InpLotSize - minLot, lotStep) > 1e-8)
+   {
+      Print("ERROR: Lot size ", InpLotSize, " is invalid. Allowed: [", minLot, " - ", maxLot, "] step ", lotStep);
+      return(INIT_FAILED);
+   }
    // Initialize core EA logic
-   coreEA.Init(InpTradeMode, InpLotSize, InpStopLoss, InpRiskValue, InpRewardValue, InpOpenTime, InpCloseTime, InpMaxReplacements, InpWindowStart, InpWindowEnd, Symbol());
+   // Note: InpRiskValue is now the dollar risk, InpStopLoss removed
+   coreEA.Init(InpTradeMode, InpLotSize, InpRiskValue, InpRewardValue, InpOpenTime, InpCloseTime, InpMaxReplacements, InpWindowStart, InpWindowEnd, Symbol());
    Print("Initialized. Magic: " + Symbol() + "_OneTradeEA");
    return(INIT_SUCCEEDED);
   }
@@ -187,8 +196,9 @@ void OnTick()
       lastDay = dt.day;
       coreEA.OnNewDay();
    }
-   // Open first trade at opening time
-   if(TimeToStr(TimeCurrent(), 0) == InpOpenTime)
+   // Open first trade at opening time (use full HH:MM:SS comparison)
+   string nowStr = TimeToStr(TimeCurrent(), 1); // HH:MM:SS
+   if(nowStr == InpOpenTime)
       coreEA.OpenFirstTrade();
    // Close all at closing time
    if(TimeToStr(TimeCurrent(), 0) == InpCloseTime)
@@ -206,9 +216,17 @@ void OnDeinit(const int reason)
 datetime ParseTime(string t)
   {
    if(t=="") return 0;
+   if(StringLen(t) != 8 || StringSubstr(t,2,1) != ":" || StringSubstr(t,5,1) != ":") {
+      Print("ERROR: Time string '", t, "' is not in HH:MM:SS format.");
+      return 0;
+   }
    int h = StringToInteger(StringSubstr(t,0,2));
    int m = StringToInteger(StringSubstr(t,3,2));
    int s = StringToInteger(StringSubstr(t,6,2));
+   if(h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59) {
+      Print("ERROR: Time string '", t, "' has invalid values.");
+      return 0;
+   }
    datetime today = DateOfDay(TimeCurrent());
    return today + h*3600 + m*60 + s;
   }

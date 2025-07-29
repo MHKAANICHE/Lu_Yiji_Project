@@ -15,8 +15,7 @@ class COneTradeEA_Core
 private:
    ENUM_ORDER_TYPE tradeMode;
    double lotSize;
-   int stopLoss;
-   double riskValue;
+   double riskValue; // Dollar risk per trade (client input)
    double rewardValue;
    string openTime;
    string closeTime;
@@ -38,8 +37,7 @@ public:
    void Init(
       ENUM_ORDER_TYPE mode,
       double lot,
-      int sl,
-      double risk,
+      double risk, // Dollar risk per trade
       double reward,
       string open,
       string close,
@@ -51,7 +49,6 @@ public:
    {
       tradeMode = mode;
       lotSize = lot;
-      stopLoss = sl;
       riskValue = risk;
       rewardValue = reward;
       openTime = open;
@@ -132,12 +129,37 @@ public:
    void OpenFirstTrade()
    {
       double price = (tradeMode == ORDER_TYPE_BUY) ? SymbolInfoDouble(m_symbol, SYMBOL_ASK) : SymbolInfoDouble(m_symbol, SYMBOL_BID);
-      double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
+      if(price == 0.0) {
+         Print("ERROR: Failed to get price for symbol ", m_symbol);
+         return;
+      }
       int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
-      double stopLossPips = stopLoss * point * 10;
-      double rr = (rewardValue > 0 && riskValue > 0) ? rewardValue / riskValue : 0;
-      double sl = (tradeMode == ORDER_TYPE_BUY) ? price - stopLossPips : price + stopLossPips;
-      double tp = (rewardValue > 0 && riskValue > 0) ? ((tradeMode == ORDER_TYPE_BUY) ? price + stopLossPips * rr : price - stopLossPips * rr) : 0;
+      if(digits <= 0) {
+         Print("ERROR: Failed to get digits for symbol ", m_symbol);
+         return;
+      }
+      double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
+      if(point <= 0) {
+         Print("ERROR: Failed to get point for symbol ", m_symbol);
+         return;
+      }
+      double pipSize = (digits == 3 || digits == 5) ? point * 10 : point;
+      double rr = rewardValue; // R:R ratio (e.g., 2 for 1:2)
+      // Calculate SL and TP prices based on dollar risk (client specifies risk in $)
+      double sl = 0, tp = 0;
+      if(tradeMode == ORDER_TYPE_BUY)
+      {
+         sl = price - riskValue;
+         tp = price + (riskValue * rr);
+      }
+      else // SELL
+      {
+         sl = price + riskValue;
+         tp = price - (riskValue * rr);
+      }
+      // Calculate pip values for logging (not used for order placement, for client transparency)
+      double sl_pips = MathAbs(price - sl) / pipSize;
+      double tp_pips = MathAbs(tp - price) / pipSize;
       MqlTradeRequest request;
       MqlTradeResult result;
       ZeroMemory(request);
@@ -147,18 +169,20 @@ public:
       request.type = tradeMode;
       request.price = price;
       request.sl = NormalizeDouble(sl, digits);
-      request.tp = (tp > 0) ? NormalizeDouble(tp, digits) : 0;
+      request.tp = NormalizeDouble(tp, digits);
       request.deviation = 10;
       request.magic = 0;
       request.comment = magicNumber;
       if(!OrderSend(request, result) || result.retcode != TRADE_RETCODE_DONE)
       {
+         // Log order send failure with calculated SL/TP in price
          LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "OrderSendFail", replacementsLeft, IntegerToString((int)result.retcode), 0);
          tradeActive = false;
          return;
       }
       tradeActive = true;
       lastOrderTicket = result.order;
+      // Log successful order open with calculated SL/TP in price
       LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "OPEN", replacementsLeft, "", result.order);
    }
 
@@ -212,6 +236,17 @@ public:
 
    void OpenPendingOrder(double entryPrice, double sl)
    {
+      int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
+      if(digits <= 0) {
+         Print("ERROR: Failed to get digits for symbol ", m_symbol);
+         return;
+      }
+      double tp = 0;
+      double rr = rewardValue;
+      if(tradeMode == ORDER_TYPE_BUY)
+         tp = entryPrice + (riskValue * rr);
+      else
+         tp = entryPrice - (riskValue * rr);
       MqlTradeRequest request;
       MqlTradeResult result;
       ZeroMemory(request);
@@ -219,20 +254,20 @@ public:
       request.symbol = m_symbol;
       request.volume = lotSize;
       request.type = tradeMode;
-      request.price = entryPrice;
-      request.sl = sl;
-      request.tp = 0;
+      request.price = NormalizeDouble(entryPrice, digits);
+      request.sl = NormalizeDouble(sl, digits);
+      request.tp = NormalizeDouble(tp, digits);
       request.deviation = 10;
       request.magic = 0;
       request.comment = magicNumber;
       if(!OrderSend(request, result) || result.retcode != TRADE_RETCODE_DONE)
       {
-         LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, 0, "PendingOrderFail", replacementsLeft, IntegerToString((int)result.retcode), 0);
+         LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "PendingOrderFail", replacementsLeft, IntegerToString((int)result.retcode), 0);
          pendingOrderActive = false;
          return;
       }
       pendingOrderActive = true;
-      LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, 0, "PENDING", replacementsLeft, "", result.order);
+      LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "PENDING", replacementsLeft, "", result.order);
    }
 
    void RemovePendingOrders()
