@@ -11,25 +11,26 @@ This Expert Advisor (EA) implements the technical requirements for the "One Trad
 
 ### Input Parameters
 
-- Trade Mode: Buy or Sell
-- Lot Size
-- Stop Loss (pips)
-- Risk:Reward ratio (for Take Profit)
-- Opening Time (HH:MM:SS)
-- Closing Time (HH:MM:SS)
-- Max Replacements (number of SL replacements)
-- Time Window Start (HH:MM:SS, optional)
-- Time Window End (HH:MM:SS, optional)
+- Trade Mode: Choose Buy or Sell mode for the day
+- Lot Size: Set your desired lot size for each trade
+- Stop Loss (in dollars): Set the maximum dollar risk per trade (not pips)
+- Take Profit (Risk:Reward ratio): Set your desired risk:reward (e.g., 2 for 1:2). Leave empty or 0 for no take profit
+- Opening Time (HH:MM:SS): The exact time the first trade will be opened each day
+- Closing Time (HH:MM:SS): The time all trades and pending orders will be closed
+- Max Replacements: Number of times to retry after a stop loss (pending order is placed at same entry)
+- Time Window Start (HH:MM:SS, optional): Start of period when replacements are disabled
+- Time Window End (HH:MM:SS, optional): End of period when replacements are disabled
 
 
 ### Technical Trading Logic
 
-- Opens the first trade at the configured Opening Time.
-- If a trade hits Stop Loss, a replacement trade is placed (up to Max Replacements).
-- Trades are closed at Take Profit or Closing Time.
-- Pending orders are removed at Closing Time.
+- At the exact Opening Time, the EA places a Buy or Sell trade (as selected in the input menu), with the lot size, stop loss, and take profit you set.
+- No other technical or price-based entry conditions are used—entry is strictly time-based.
+- If a trade hits Stop Loss, a pending order is placed at the same entry price (up to Max Replacements).
+- Trades are closed at Take Profit (if set) or at the Closing Time.
+- At Closing Time, all trades and pending orders are closed/removed.
 - Time Window disables replacements during the specified period.
-- EA resets daily for new trading cycles.
+- The EA resets daily for a new trading cycle.
 
 
 
@@ -110,13 +111,17 @@ flowchart TD
 
 ## Client Requirements Coverage
 
-All technical requirements from the client specification are fully implemented:
 
-- Automated trading logic (open, close, SL/TP, replacements)
-- Configurable input parameters
-- Time window logic
-- Daily reset
-- Robust CSV output for all trades
+### Client Requirements Coverage
+
+- Buy/Sell mode selection
+- Lot size and stop loss (dollar risk)
+- Take profit as risk:reward (optional)
+- Strictly time-based entry (no indicators or price action)
+- Replacements after stop loss, with max count
+- Time window disables replacements
+- Daily reset and new trade each day
+- All trades and events logged to unique CSV file
 
 
 
