@@ -2,6 +2,10 @@
 //| OneTradeEA_Core.mqh                                              |
 //| Implements the core logic for One Trade EA as per requirements   |
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| OneTradeEA_Core.mqh                                              |
+//| Implements the core logic for One Trade EA as per requirements   |
+//+------------------------------------------------------------------+
 #ifndef __ONETRADEEA_CORE_MQH__
 #define __ONETRADEEA_CORE_MQH__
 
@@ -13,6 +17,9 @@
 class COneTradeEA_Core
   {
 private:
+   double originalEntryPrice;
+   double originalSL;
+   double originalTP;
    ENUM_ORDER_TYPE tradeMode;
    double lotSize;
    double riskValue; // Dollar risk per trade (client input)
@@ -149,12 +156,11 @@ public:
          Print("[OneTradeEA][ERROR] Failed to get price for symbol ", m_symbol);
          return;
       }
-      long digits_long = 0;
-      if(!SymbolInfoInteger(m_symbol, SYMBOL_DIGITS, digits_long)) {
+      int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
+      if(digits <= 0) {
          Print("[OneTradeEA][ERROR] Failed to get digits for symbol ", m_symbol);
          return;
       }
-      int digits = (int)digits_long;
       double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
       if(point <= 0) {
          Print("[OneTradeEA][ERROR] Failed to get point for symbol ", m_symbol);
@@ -177,6 +183,10 @@ public:
          sl = price + sl_distance;
          tp = price - (sl_distance * rr);
       }
+      // Store original entry/SL/TP for replacement logic
+      originalEntryPrice = price;
+      originalSL = sl;
+      originalTP = tp;
       // ...existing code for pip values, request, and order send logic...
       double pipSize = (digits == 3 || digits == 5) ? point * 10 : point;
       double sl_pips = MathAbs(price - sl) / pipSize;
@@ -242,6 +252,12 @@ public:
             double sl = PositionGetDouble(POSITION_SL);
             double tp = PositionGetDouble(POSITION_TP);
             double priceCurrent = (tradeMode==ORDER_TYPE_BUY) ? SymbolInfoDouble(m_symbol, SYMBOL_BID) : SymbolInfoDouble(m_symbol, SYMBOL_ASK);
+            // If a pending order was active and now a position is open, reset state
+            if(pendingOrderActive && !tradeActive)
+            {
+               tradeActive = true;
+               pendingOrderActive = false;
+            }
             // SL hit
             if(sl > 0 && ((tradeMode == ORDER_TYPE_BUY && priceCurrent <= sl) || (tradeMode == ORDER_TYPE_SELL && priceCurrent >= sl)))
             {
@@ -259,7 +275,8 @@ public:
                {
                   replacementsLeft--;
                   pendingOrderActive = true;
-                  OpenPendingOrder(priceCurrent, sl);
+                  // Use original entry/SL for pending order
+                  OpenPendingOrder(originalEntryPrice, originalSL);
                }
                return; // Only handle one position per tick
             }
@@ -287,12 +304,11 @@ public:
 
    void OpenPendingOrder(double entryPrice, double sl)
    {
-      long digits_long = 0;
-      if(!SymbolInfoInteger(m_symbol, SYMBOL_DIGITS, digits_long)) {
+      int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
+      if(digits <= 0) {
          Print("[OneTradeEA][ERROR] Failed to get digits for symbol ", m_symbol);
          return;
       }
-      int digits = (int)digits_long;
       double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
       if(point <= 0) {
          Print("[OneTradeEA][ERROR] Failed to get point for symbol ", m_symbol);
@@ -305,11 +321,8 @@ public:
          Print("[OneTradeEA][ERROR] SL distance calculation failed (pending order)");
          return;
       }
-      double tp = 0;
-      if(tradeMode == ORDER_TYPE_BUY)
-         tp = entryPrice + (sl_distance * rr);
-      else
-         tp = entryPrice - (sl_distance * rr);
+      // Use original TP for replacement logic
+      double tp = originalTP;
       MqlTradeRequest request;
       MqlTradeResult result;
       ZeroMemory(request);
