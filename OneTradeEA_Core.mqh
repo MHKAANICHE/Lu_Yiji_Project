@@ -33,6 +33,7 @@ private:
 
 public:
    COneTradeEA_Core() {}
+   bool IsTradeActive() const { return tradeActive; }
 
    void Init(
       ENUM_ORDER_TYPE mode,
@@ -126,38 +127,58 @@ public:
       pendingOrderActive = false;
    }
 
+   // Calculate price distance for SL/TP based on dollar risk
+   double CalculateSLDistance()
+   {
+      double tickValue = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_VALUE);
+      double tickSize = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_SIZE);
+      double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
+      if(tickValue <= 0 || tickSize <= 0 || point <= 0) {
+         Print("[OneTradeEA][ERROR] Invalid tickValue/tickSize/point for symbol ", m_symbol);
+         return 0;
+      }
+      // How many price units (in points) for the given dollar risk
+      double sl_distance = (riskValue / (tickValue * lotSize)) * tickSize / point;
+      return sl_distance * point;
+   }
+
    void OpenFirstTrade()
    {
       double price = (tradeMode == ORDER_TYPE_BUY) ? SymbolInfoDouble(m_symbol, SYMBOL_ASK) : SymbolInfoDouble(m_symbol, SYMBOL_BID);
       if(price == 0.0) {
-         Print("ERROR: Failed to get price for symbol ", m_symbol);
+         Print("[OneTradeEA][ERROR] Failed to get price for symbol ", m_symbol);
          return;
       }
-      int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
-      if(digits <= 0) {
-         Print("ERROR: Failed to get digits for symbol ", m_symbol);
+      long digits_long = 0;
+      if(!SymbolInfoInteger(m_symbol, SYMBOL_DIGITS, digits_long)) {
+         Print("[OneTradeEA][ERROR] Failed to get digits for symbol ", m_symbol);
          return;
       }
+      int digits = (int)digits_long;
       double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
       if(point <= 0) {
-         Print("ERROR: Failed to get point for symbol ", m_symbol);
+         Print("[OneTradeEA][ERROR] Failed to get point for symbol ", m_symbol);
          return;
       }
-      double pipSize = (digits == 3 || digits == 5) ? point * 10 : point;
       double rr = rewardValue; // R:R ratio (e.g., 2 for 1:2)
-      // Calculate SL and TP prices based on dollar risk (client specifies risk in $)
+      double sl_distance = CalculateSLDistance();
+      if(sl_distance <= 0) {
+         Print("[OneTradeEA][ERROR] SL distance calculation failed");
+         return;
+      }
       double sl = 0, tp = 0;
       if(tradeMode == ORDER_TYPE_BUY)
       {
-         sl = price - riskValue;
-         tp = price + (riskValue * rr);
+         sl = price - sl_distance;
+         tp = price + (sl_distance * rr);
       }
       else // SELL
       {
-         sl = price + riskValue;
-         tp = price - (riskValue * rr);
+         sl = price + sl_distance;
+         tp = price - (sl_distance * rr);
       }
-      // Calculate pip values for logging (not used for order placement, for client transparency)
+      // ...existing code for pip values, request, and order send logic...
+      double pipSize = (digits == 3 || digits == 5) ? point * 10 : point;
       double sl_pips = MathAbs(price - sl) / pipSize;
       double tp_pips = MathAbs(tp - price) / pipSize;
       MqlTradeRequest request;
@@ -173,8 +194,30 @@ public:
       request.deviation = 10;
       request.magic = 0;
       request.comment = magicNumber;
-      if(!OrderSend(request, result) || result.retcode != TRADE_RETCODE_DONE)
-      {
+      // Use only supported filling modes for the symbol
+      long filling_mode_long = 0;
+      if(!SymbolInfoInteger(m_symbol, SYMBOL_FILLING_MODE, filling_mode_long)) {
+         Print("[OneTradeEA][ERROR] Failed to get SYMBOL_FILLING_MODE for symbol ", m_symbol);
+         return;
+      }
+      int filling_mode = (int)filling_mode_long;
+      int try_modes[3] = {ORDER_FILLING_FOK, ORDER_FILLING_IOC, ORDER_FILLING_RETURN};
+      bool orderSent = false;
+      for(int i=0; i<3 && !orderSent; i++) {
+         int mode = try_modes[i];
+         request.type_filling = (ENUM_ORDER_TYPE_FILLING)mode;
+         if(OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE) {
+            orderSent = true;
+         }
+      }
+      // As last resort, try the default mode
+      if(!orderSent) {
+         request.type_filling = (ENUM_ORDER_TYPE_FILLING)filling_mode;
+         if(OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE) {
+            orderSent = true;
+         }
+      }
+      if(!orderSent) {
          // Log order send failure with calculated SL/TP in price
          LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "OrderSendFail", replacementsLeft, IntegerToString((int)result.retcode), 0);
          tradeActive = false;
@@ -188,15 +231,17 @@ public:
 
    void MonitorTrades()
    {
+      // Check if any position is open for this EA
+      bool found = false;
       for(int i=0; i<PositionsTotal(); i++)
       {
          ulong ticket = PositionGetTicket(i);
          if(PositionGetString(POSITION_SYMBOL) == m_symbol && PositionGetString(POSITION_COMMENT) == magicNumber)
          {
+            found = true;
             double sl = PositionGetDouble(POSITION_SL);
             double tp = PositionGetDouble(POSITION_TP);
             double priceCurrent = (tradeMode==ORDER_TYPE_BUY) ? SymbolInfoDouble(m_symbol, SYMBOL_BID) : SymbolInfoDouble(m_symbol, SYMBOL_ASK);
-            bool closed = false;
             // SL hit
             if(sl > 0 && ((tradeMode == ORDER_TYPE_BUY && priceCurrent <= sl) || (tradeMode == ORDER_TYPE_SELL && priceCurrent >= sl)))
             {
@@ -208,16 +253,18 @@ public:
                {
                   LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "SL_FAIL", replacementsLeft, "CLOSE", ticket);
                }
+               // Only place replacement if not in time window, replacementsLeft > 0, and no pending order is active
                tradeActive = false;
-               closed = true;
-               if(replacementsLeft > 0 && !IsInTimeWindow(TimeCurrent()))
+               if(replacementsLeft > 0 && !IsInTimeWindow(TimeCurrent()) && !pendingOrderActive)
                {
                   replacementsLeft--;
+                  pendingOrderActive = true;
                   OpenPendingOrder(priceCurrent, sl);
                }
+               return; // Only handle one position per tick
             }
             // TP hit
-            if(!closed && tp > 0 && ((tradeMode == ORDER_TYPE_BUY && priceCurrent >= tp) || (tradeMode == ORDER_TYPE_SELL && priceCurrent <= tp)))
+            if(tp > 0 && ((tradeMode == ORDER_TYPE_BUY && priceCurrent >= tp) || (tradeMode == ORDER_TYPE_SELL && priceCurrent <= tp)))
             {
                if(PositionCloseHelper(ticket))
                {
@@ -229,24 +276,40 @@ public:
                }
                tradeActive = false;
                replacementsLeft = 0;
+               pendingOrderActive = false;
+               return;
             }
          }
       }
+      // If no position found, set tradeActive to false
+      tradeActive = found;
    }
 
    void OpenPendingOrder(double entryPrice, double sl)
    {
-      int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
-      if(digits <= 0) {
-         Print("ERROR: Failed to get digits for symbol ", m_symbol);
+      long digits_long = 0;
+      if(!SymbolInfoInteger(m_symbol, SYMBOL_DIGITS, digits_long)) {
+         Print("[OneTradeEA][ERROR] Failed to get digits for symbol ", m_symbol);
+         return;
+      }
+      int digits = (int)digits_long;
+      double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
+      if(point <= 0) {
+         Print("[OneTradeEA][ERROR] Failed to get point for symbol ", m_symbol);
+         return;
+      }
+      double rr = rewardValue;
+      // Calculate SL distance for pending order (use same as market order)
+      double sl_distance = CalculateSLDistance();
+      if(sl_distance <= 0) {
+         Print("[OneTradeEA][ERROR] SL distance calculation failed (pending order)");
          return;
       }
       double tp = 0;
-      double rr = rewardValue;
       if(tradeMode == ORDER_TYPE_BUY)
-         tp = entryPrice + (riskValue * rr);
+         tp = entryPrice + (sl_distance * rr);
       else
-         tp = entryPrice - (riskValue * rr);
+         tp = entryPrice - (sl_distance * rr);
       MqlTradeRequest request;
       MqlTradeResult result;
       ZeroMemory(request);
@@ -260,8 +323,30 @@ public:
       request.deviation = 10;
       request.magic = 0;
       request.comment = magicNumber;
-      if(!OrderSend(request, result) || result.retcode != TRADE_RETCODE_DONE)
-      {
+      // Use only supported filling modes for the symbol
+      long filling_mode_long = 0;
+      if(!SymbolInfoInteger(m_symbol, SYMBOL_FILLING_MODE, filling_mode_long)) {
+         Print("[OneTradeEA][ERROR] Failed to get SYMBOL_FILLING_MODE for symbol ", m_symbol);
+         return;
+      }
+      int filling_mode = (int)filling_mode_long;
+      int try_modes[3] = {ORDER_FILLING_FOK, ORDER_FILLING_IOC, ORDER_FILLING_RETURN};
+      bool orderSent = false;
+      for(int i=0; i<3 && !orderSent; i++) {
+         int mode = try_modes[i];
+         request.type_filling = (ENUM_ORDER_TYPE_FILLING)mode;
+         if(OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE) {
+            orderSent = true;
+         }
+      }
+      // As last resort, try the default mode
+      if(!orderSent) {
+         request.type_filling = (ENUM_ORDER_TYPE_FILLING)filling_mode;
+         if(OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE) {
+            orderSent = true;
+         }
+      }
+      if(!orderSent) {
          LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "PendingOrderFail", replacementsLeft, IntegerToString((int)result.retcode), 0);
          pendingOrderActive = false;
          return;
@@ -289,6 +374,12 @@ public:
       {
          ulong ticket = PositionGetTicket(i);
          if(PositionGetString(POSITION_SYMBOL) == m_symbol && PositionGetString(POSITION_COMMENT) == magicNumber)
+            // If a new position is opened (pending order triggered), reset pendingOrderActive
+            if(!tradeActive && PositionGetDouble(POSITION_PRICE_OPEN) != 0)
+            {
+               tradeActive = true;
+               pendingOrderActive = false;
+            }
          {
             PositionCloseHelper(ticket);
          }

@@ -198,8 +198,10 @@ void OnTick()
    }
    // Open first trade at opening time (use full HH:MM:SS comparison)
    string nowStr = TimeToStr(TimeCurrent(), 1); // HH:MM:SS
-   if(nowStr == InpOpenTime)
+   if(nowStr == InpOpenTime && !coreEA.IsTradeActive())
+   {
       coreEA.OpenFirstTrade();
+   }
    // Close all at closing time
    if(TimeToStr(TimeCurrent(), 0) == InpCloseTime)
       coreEA.OnCloseTime();
