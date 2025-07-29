@@ -212,20 +212,7 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
    }
 
 
-// Unlock input fields on EA deinitialization (call from OnDeinit in main EA)
-void UnlockInputFields()
-{
-   ObjectSetInteger(0, OBJ_MODE_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_LOT_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_SL_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_RR_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_OPEN_TIME_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_CLOSE_TIME_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_REPLACE_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_TIME_WINDOW_INPUT, OBJPROP_READONLY, false);
-   mainPanel.Create("Gui", 30, 30, 540);
-   mainPanel.ValidateInputs();
-}
+
 }
 
 #endif // __EVENTHANDLER_MQH__
