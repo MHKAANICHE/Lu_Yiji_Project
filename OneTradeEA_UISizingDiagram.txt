@@ -1,0 +1,35 @@
+# One Trade EA UI Sizing Diagram
+
+Below is a technical sizing diagram for the UI layout, based on the schema in `OneTradeEA_UISchema.md`. This diagram uses ASCII art to visualize the positions, sizes, and relationships of all blocks and controls. All measurements are in pixels.
+
+```
++--------------------------------------------------------------+
+| PanelBG (X:10, Y:10, W:400, H:340)                          |
+|  +--------------------------------------------------------+  |
+|  | TitleBlock (X:28, Y:28, W:364, H:48)                   |  |
+|  |  TitleLabel (X:44, Y:40)                               |  |
+|  |  StatusLabel (X:44, Y:56)                              |  |
+|  +--------------------------------------------------------+  |
+|  | ModeBlock   (X:28,  Y:76,  W:174, H:48) | LotBlock   (X:218, Y:76,  W:174, H:48) |  |
+|  | SLBlock     (X:28,  Y:134, W:174, H:48) | ReplBlock  (X:218, Y:134, W:174, H:48) |  |
+|  | RiskBlock   (X:28,  Y:192, W:174, H:48) | RewardBlock(X:218, Y:192, W:174, H:48) |  |
+|  | OpenBlock   (X:28,  Y:250, W:174, H:48) | CloseBlock (X:218, Y:250, W:174, H:48) |  |
+|  +--------------------------------------------------------+  |
+|  | TWBlock (X:28, Y:308, W:364, H:48)                     |  |
+|  +--------------------------------------------------------+  |
+|  | ButtonRow (X:28, Y:366, W:364, H:40)                   |  |
+|  |  StartEAButton (X:44, Y:372, W:100, H:28)              |  |
+|  |  ReplaceOrderButton (X:162, Y:372, W:100, H:28)        |  |
+|  |  ResetButton (X:280, Y:372, W:100, H:28)               |  |
+|  +--------------------------------------------------------+  |
++--------------------------------------------------------------+
+```
+
+## Legend
+- All X, Y, W, H values are in pixels.
+- Each block is shown in its relative position and size.
+- Button positions are calculated from ButtonRow X + padding and gaps.
+
+## Usage
+- Use this diagram to visually confirm the layout and sizing of all UI elements before coding or adjusting the MQL5 implementation.
+- For graphical design, this can be converted to a vector diagram or used as a reference for Figma/Sketch.
