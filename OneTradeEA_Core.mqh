@@ -309,20 +309,10 @@ public:
          Print("[OneTradeEA][ERROR] Failed to get digits for symbol ", m_symbol);
          return;
       }
-      double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
-      if(point <= 0) {
-         Print("[OneTradeEA][ERROR] Failed to get point for symbol ", m_symbol);
-         return;
-      }
-      double rr = rewardValue;
-      // Calculate SL distance for pending order (use same as market order)
-      double sl_distance = CalculateSLDistance();
-      if(sl_distance <= 0) {
-         Print("[OneTradeEA][ERROR] SL distance calculation failed (pending order)");
-         return;
-      }
-      // Use original TP for replacement logic
-      double tp = originalTP;
+      // Always use the original entry, SL, and TP for the replacement pending order
+      double entry = originalEntryPrice;
+      double sl_val = originalSL;
+      double tp_val = originalTP;
       MqlTradeRequest request;
       MqlTradeResult result;
       ZeroMemory(request);
@@ -330,9 +320,9 @@ public:
       request.symbol = m_symbol;
       request.volume = lotSize;
       request.type = tradeMode;
-      request.price = NormalizeDouble(entryPrice, digits);
-      request.sl = NormalizeDouble(sl, digits);
-      request.tp = NormalizeDouble(tp, digits);
+      request.price = NormalizeDouble(entry, digits);
+      request.sl = NormalizeDouble(sl_val, digits);
+      request.tp = NormalizeDouble(tp_val, digits);
       request.deviation = 10;
       request.magic = 0;
       request.comment = magicNumber;
@@ -360,12 +350,12 @@ public:
          }
       }
       if(!orderSent) {
-         LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "PendingOrderFail", replacementsLeft, IntegerToString((int)result.retcode), 0);
+         LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl_val, tp_val, "PendingOrderFail", replacementsLeft, IntegerToString((int)result.retcode), 0);
          pendingOrderActive = false;
          return;
       }
       pendingOrderActive = true;
-      LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "PENDING", replacementsLeft, "", result.order);
+      LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl_val, tp_val, "PENDING", replacementsLeft, "", result.order);
    }
 
    void RemovePendingOrders()

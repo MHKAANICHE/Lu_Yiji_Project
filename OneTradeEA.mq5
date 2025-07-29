@@ -198,7 +198,16 @@ void OnTick()
    }
    // Open first trade at opening time (use full HH:MM:SS comparison)
    string nowStr = TimeToStr(TimeCurrent(), 1); // HH:MM:SS
-   if(nowStr == InpOpenTime && !coreEA.IsTradeActive())
+   // Only open a new market order if there is no active trade and no pending order
+   bool hasPendingOrder = false;
+   for(int i=0; i<OrdersTotal(); i++) {
+      ulong ticket = OrderGetTicket(i);
+      if(OrderGetString(ORDER_SYMBOL) == Symbol() && OrderGetString(ORDER_COMMENT) == Symbol() + "_OneTradeEA") {
+         hasPendingOrder = true;
+         break;
+      }
+   }
+   if(nowStr == InpOpenTime && !coreEA.IsTradeActive() && !hasPendingOrder)
    {
       coreEA.OpenFirstTrade();
    }
