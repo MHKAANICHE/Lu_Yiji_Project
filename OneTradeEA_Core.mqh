@@ -108,8 +108,10 @@ public:
       if(t=="") return 0;
       int h = StringToInteger(StringSubstr(t,0,2));
       int m = StringToInteger(StringSubstr(t,3,2));
+      int s = 0;
+      if(StringLen(t) >= 8) s = StringToInteger(StringSubstr(t,6,2));
       datetime today = DateOfDay(TimeCurrent());
-      return today + h*3600 + m*60;
+      return today + h*3600 + m*60 + s;
    }
 
    bool IsInTimeWindow(datetime now)

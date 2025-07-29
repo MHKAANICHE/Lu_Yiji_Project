@@ -7,15 +7,9 @@
 #property version   "1.00"
 #property strict
 
-
-
 #include <Trade/Trade.mqh>
 #include <Trade/PositionInfo.mqh>
-
-// Remove EasyAndFastGUI includes and use SimpleWindow
-#include <InterfaceGui.mqh>
 #include <OneTradeEA_Core.mqh>
-#include <EventHandler.mqh>
 
 #ifndef OBJPROP_HEIGHT
 #define OBJPROP_HEIGHT 133
@@ -53,11 +47,11 @@ input double            InpLotSize   = 0.10;           // Lot Size
 input int               InpStopLoss  = 20;             // Stop Loss (pips)
 input double            InpRiskValue = 1.00;           // Risk [1] (value)
 input double            InpRewardValue = 2.00;         // Reward [2] (value)
-input string            InpOpenTime  = "09:00";        // Opening Time (HH:MM)
-input string            InpCloseTime = "17:00";        // Closing Time (HH:MM)
+input string            InpOpenTime  = "09:00:00";     // Opening Time (HH:MM:SS)
+input string            InpCloseTime = "17:00:00";     // Closing Time (HH:MM:SS)
 input int               InpMaxReplacements = 2;        // Max Replacements
-input string            InpWindowStart = "";           // Time Window Start (HH:MM, empty=off)
-input string            InpWindowEnd   = "";           // Time Window End (HH:MM, empty=off)
+input string            InpWindowStart = "";           // Time Window Start (HH:MM:SS, empty=off)
+input string            InpWindowEnd   = "";           // Time Window End (HH:MM:SS, empty=off)
 
 //--- OOP Managers
 class TimeManager
@@ -90,12 +84,6 @@ class TimeManager
         }
   };
 
-//--- UI Object Name Constants
-#define OT_PANEL      "OneTradeEA_Panel"
-#define OT_LABEL      "OneTradeEA_Label"
-
-
-
 class TradeManager
   {
    public:
@@ -121,119 +109,11 @@ class TradeManager
         }
       void OpenFirstTrade()
         {
-         MqlTradeRequest request;
-         MqlTradeResult result;
-         double price = 0, sl = 0, tp = 0;
-         int digits = (int)SymbolInfoInteger(Symbol(), SYMBOL_DIGITS);
-         double point = SymbolInfoDouble(Symbol(), SYMBOL_POINT);
-         double stopLossPips = InpStopLoss * point * 10;
-         double rr = InpRewardValue / InpRiskValue;
-         double lot = InpLotSize;
-         ENUM_ORDER_TYPE orderType = InpTradeMode;
-         string tradeType = (orderType == ORDER_TYPE_BUY) ? "BUY" : "SELL";
-         if(orderType == ORDER_TYPE_BUY)
-           {
-            price = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
-            sl = price - stopLossPips;
-            tp = price + stopLossPips * rr;
-           }
-         else if(orderType == ORDER_TYPE_SELL)
-           {
-            price = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-            sl = price + stopLossPips;
-            tp = price - stopLossPips * rr;
-           }
-         else
-           {
-            logger.Log("ERROR: Invalid trade mode.");
-            logger.LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), Symbol(), "ERROR", lot, sl, tp, "OrderSendFail", replacementsLeft, "MODE", 0);
-            return;
-           }
-         ZeroMemory(request);
-         request.action = TRADE_ACTION_DEAL;
-         request.symbol = Symbol();
-         request.volume = lot;
-         request.type = orderType;
-         request.price = price;
-         request.sl = NormalizeDouble(sl, digits);
-         request.tp = NormalizeDouble(tp, digits);
-         request.deviation = 10;
-         request.magic = 0; // Use 0 for simplicity, or set a unique int if needed
-         request.comment = magicNumber;
-         if(!OrderSend(request, result) || result.retcode != TRADE_RETCODE_DONE)
-           {
-            logger.Log("ERROR: OrderSend failed. Retcode: " + IntegerToString(result.retcode));
-            logger.LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), Symbol(), tradeType, lot, sl, tp, "OrderSendFail", replacementsLeft, IntegerToString(result.retcode), 0);
-            tradeActive = false;
-            return;
-           }
-         tradeActive = true;
-         replacementsLeft = InpMaxReplacements;
-         logger.Log("First trade opened at " + TimeToString(TimeCurrent(), TIME_SECONDS) + ", Ticket: " + IntegerToString(result.order));
-         logger.LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), Symbol(), tradeType, lot, sl, tp, "OPEN", replacementsLeft, "", result.order);
+         // Implement trade opening logic here if needed
         }
       void MonitorTrades()
         {
-         for(int i=0; i<PositionsTotal(); i++)
-           {
-            ulong ticket = PositionGetTicket(i);
-            if(PositionGetString(POSITION_SYMBOL) == Symbol() && PositionGetString(POSITION_COMMENT) == magicNumber)
-              {
-               double sl = PositionGetDouble(POSITION_SL);
-               double tp = PositionGetDouble(POSITION_TP);
-               double priceOpen = PositionGetDouble(POSITION_PRICE_OPEN);
-               double priceCurrent = (mainPanel.GetMode()==0) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) : SymbolInfoDouble(Symbol(), SYMBOL_ASK);
-               bool closed = false;
-               // Check for SL hit
-               if(sl > 0 && ((mainPanel.GetMode() == 0 && priceCurrent <= sl) || (mainPanel.GetMode() == 1 && priceCurrent >= sl)))
-                 {
-                  logger.Log("SL hit. Closing position.");
-                  string date = TimeToString(TimeCurrent(), TIME_DATE);
-                  string time = TimeToString(TimeCurrent(), TIME_SECONDS);
-                  if(PositionClose(ticket))
-                    {
-                     logger.Log("Position closed (SL). Ticket: " + IntegerToString(ticket));
-                     logger.LogCSV(date, time, Symbol(), (mainPanel.GetMode()==0?"BUY":"SELL"), mainPanel.GetLot(), sl, tp, "SL", replacementsLeft, "", ticket);
-                    }
-                  else
-                    {
-                     logger.Log("ERROR: Failed to close position (SL). Ticket: " + IntegerToString(ticket));
-                     logger.LogCSV(date, time, Symbol(), (mainPanel.GetMode()==0?"BUY":"SELL"), mainPanel.GetLot(), sl, tp, "SL_FAIL", replacementsLeft, "CLOSE", ticket);
-                    }
-                  tradeActive = false;
-                  closed = true;
-                  if(replacementsLeft > 0)
-                    {
-                     replacementsLeft--;
-                     logger.Log("Opening replacement trade. Replacements left: " + IntegerToString(replacementsLeft));
-                     OpenFirstTrade();
-                    }
-                  else
-                    {
-                     logger.Log("No replacements left. Trading done for today.");
-                    }
-                 }
-               // Check for TP hit
-               if(!closed && tp > 0 && ((mainPanel.GetMode() == 0 && priceCurrent >= tp) || (mainPanel.GetMode() == 1 && priceCurrent <= tp)))
-                 {
-                  logger.Log("TP hit. Closing position. Trading done for today.");
-                  string date = TimeToString(TimeCurrent(), TIME_DATE);
-                  string time = TimeToString(TimeCurrent(), TIME_SECONDS);
-                  if(PositionClose(ticket))
-                    {
-                     logger.Log("Position closed (TP). Ticket: " + IntegerToString(ticket));
-                     logger.LogCSV(date, time, Symbol(), (mainPanel.GetMode()==0?"BUY":"SELL"), mainPanel.GetLot(), sl, tp, "TP", replacementsLeft, "", ticket);
-                    }
-                  else
-                    {
-                     logger.Log("ERROR: Failed to close position (TP). Ticket: " + IntegerToString(ticket));
-                     logger.LogCSV(date, time, Symbol(), (mainPanel.GetMode()==0?"BUY":"SELL"), mainPanel.GetLot(), sl, tp, "TP_FAIL", replacementsLeft, "CLOSE", ticket);
-                    }
-                  tradeActive = false;
-                  replacementsLeft = 0;
-                 }
-              }
-           }
+         // Implement trade monitoring logic here if needed
         }
   };
 
@@ -250,7 +130,6 @@ class Logger
       void InitCSV(string filename)
         {
          csvFile = filename;
-         // Write header if file does not exist
          int handle = FileOpen(csvFile, FILE_READ|FILE_TXT);
          if(handle < 0)
            {
@@ -282,52 +161,23 @@ TimeManager timeManager;
 TradeManager tradeManager;
 Logger logger;
 
-// Main panel UI
-CInterfaceGui mainPanel;
-
-
-// Define global pointer for coreEA to resolve extern in EventHandler.mqh
+// Define global object for coreEA
 COneTradeEA_Core coreEA_instance;
-COneTradeEA_Core *coreEA = &coreEA_instance;
+#define coreEA coreEA_instance
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   // Instantiate and initialize logical UI
-   mainPanel.Create("Gui", 30, 30, 540);
-   mainPanel.SetMode(InpTradeMode == ORDER_TYPE_BUY ? 0 : 1);
-   mainPanel.SetLot(InpLotSize);
-   mainPanel.SetSL(InpStopLoss);
-   mainPanel.SetRepl(InpMaxReplacements);
-   mainPanel.SetRisk(InpRiskValue);
-   mainPanel.SetReward(InpRewardValue);
-   mainPanel.SetOpenTime(InpOpenTime);
-   mainPanel.SetCloseTime(InpCloseTime);
-   mainPanel.SetTWStart(InpWindowStart);
-   mainPanel.SetTWEnd(InpWindowEnd);
-   mainPanel.ValidateInputs();
-
-   // Render all graphical/chart objects via InterfaceGui
-   mainPanel.RenderUI();
-
-   logger.Log("Initialized. Magic: " + Symbol() + "_OneTradeEA");
+   // Initialize core EA logic
+   coreEA.Init(InpTradeMode, InpLotSize, InpStopLoss, InpRiskValue, InpRewardValue, InpOpenTime, InpCloseTime, InpMaxReplacements, InpWindowStart, InpWindowEnd, Symbol());
+   Print("Initialized. Magic: " + Symbol() + "_OneTradeEA");
    return(INIT_SUCCEEDED);
   }
 
 void OnTick()
   {
-   string status = "OneTradeEA Running\n";
-   status += "Mode: " + (mainPanel.GetMode()==0?"BUY":"SELL") + "\n";
-   status += "Lot: " + DoubleToString(mainPanel.GetLot(),2) + "\n";
-   status += "SL: " + IntegerToString(mainPanel.GetSL()) + "\n";
-   status += "Risk: " + DoubleToString(mainPanel.GetRisk(),2) + "\n";
-   status += "Reward: " + DoubleToString(mainPanel.GetReward(),2) + "\n";
-   status += "Open: " + mainPanel.GetOpenTime() + "\n";
-   status += "Close: " + mainPanel.GetCloseTime() + "\n";
-   status += "Repl left: " + IntegerToString(mainPanel.GetRepl());
-   Comment(status);
    // Call core EA trade monitoring
    coreEA.MonitorTrades();
    // --- Handle daily reset and open/close times ---
@@ -344,37 +194,12 @@ void OnTick()
    if(TimeToStr(TimeCurrent(), 0) == InpCloseTime)
       coreEA.OnCloseTime();
   }
-// Unlock input fields on EA deinitialization (call from OnDeinit in main EA)
-void UnlockInputFields()
-{
-   ObjectSetInteger(0, OBJ_MODE_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_LOT_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_SL_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_RR_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_OPEN_TIME_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_CLOSE_TIME_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_REPLACE_INPUT, OBJPROP_READONLY, false);
-   ObjectSetInteger(0, OBJ_TIME_WINDOW_INPUT, OBJPROP_READONLY, false);
-   mainPanel.Create("Gui", 30, 30, 540);
-   mainPanel.ValidateInputs();
-}
 
-//+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
-//+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
-   // Cleanup panel UI
-   mainPanel.Delete();
-   // Unlock input fields for next use
-   UnlockInputFields();
-   ChartRedraw(0);
+   // No graphical cleanup needed
   }
 
-//+------------------------------------------------------------------+
-//| Chart event handler: wire up UI events to EventHandler.mqh      |
-//+------------------------------------------------------------------+
-// OnChartEvent is handled via EventHandler.mqh
 //+------------------------------------------------------------------+
 //| Helper: Parse time string (HH:MM) to datetime (today)           |
 //+------------------------------------------------------------------+
@@ -383,18 +208,17 @@ datetime ParseTime(string t)
    if(t=="") return 0;
    int h = StringToInteger(StringSubstr(t,0,2));
    int m = StringToInteger(StringSubstr(t,3,2));
+   int s = StringToInteger(StringSubstr(t,6,2));
    datetime today = DateOfDay(TimeCurrent());
-   return today + h*3600 + m*60;
+   return today + h*3600 + m*60 + s;
   }
 
 //+------------------------------------------------------------------+
 //| Helper: Check if now is within the time window                   |
 //+------------------------------------------------------------------+
-// ...existing code...
-
+// Implement IsInTimeWindow logic in TimeManager or COneTradeEA_Core if needed
 //+------------------------------------------------------------------+
 //| (Placeholder) Handle trade monitoring, SL/TP, replacements       |
 //+------------------------------------------------------------------+
-// Implement trade monitoring, SL/TP hit detection, replacement logic, CSV logging, and graphical/chart features as needed.
-// See README and One_Trade_EA_Event_Charts.md for full requirements.
+// Implement trade monitoring, SL/TP hit detection, replacement logic, CSV logging, as needed
 //+------------------------------------------------------------------+
