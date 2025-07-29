@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>One Trade EA - UI Mockup</title>
+  <title>One Trade EA - MT5 Feasible UI Mockup</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f6fa; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #0001; padding: 32px; }
@@ -10,133 +10,57 @@
     .row { display: flex; align-items: center; margin-bottom: 16px; }
     .row label { flex: 1; }
     .row input, .row select { flex: 2; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; }
-    .row input[disabled], .row select[disabled] { background: #eee; }
     .btn { padding: 10px 24px; border: none; border-radius: 4px; background: #1976d2; color: #fff; font-weight: bold; cursor: pointer; margin-right: 8px; }
     .btn:disabled { background: #b0b0b0; cursor: not-allowed; }
     .status-panel { background: #e3f2fd; border-radius: 6px; padding: 12px; margin-top: 24px; }
-    .chart-area { margin: 32px 0; background: #f9f9f9; border: 1px dashed #bbb; border-radius: 8px; height: 180px; display: flex; align-items: center; justify-content: center; color: #888; font-size: 1.1em; }
-    .shadow { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; z-index: 10; }
-    .shadow-message { background: #fff; padding: 32px 48px; border-radius: 10px; box-shadow: 0 2px 12px #0002; font-size: 1.2em; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>One Trade EA - Control Panel</h2>
-    <div class="row" style="justify-content:center;">
-      <span style="font-size:1.1em; font-weight:bold; color:#1976d2;">Magic Number: BTCUSD-54321</span>
+    <h2>One Trade EA - MT5 Feasible Control Panel</h2>
+    <!-- Only controls feasible in MT5 -->
+    <div class="row">
+      <label for="mode">Mode</label>
+      <select id="mode">
+        <option>Buy</option>
+        <option>Sell</option>
+      </select>
     </div>
-    <div class="row" style="justify-content:center; margin-bottom:24px;">
-      <div style="font-size:1em; color:#333; background:#e0f7fa; border-radius:6px; padding:12px 20px; max-width:520px;">
-        <strong>Instrument:</strong> BTCUSD<br>
-        <strong>Digits:</strong> 2<br>
-        <strong>Current Price:</strong> 67,890.50<br>
-        <strong>What does 100 pips mean?</strong><br>
-        &bull; For BTCUSD (2 digits), 1 pip = 0.01<br>
-        &bull; 100 pips = 1.00<br>
-        &bull; <em>If price moves from 67,890.50 to 67,891.50, that's a move of 100 pips.</em><br>
-        <span style="color:#1976d2;">This helps you set your Stop Loss and Take Profit correctly for this instrument.</span>
-      </div>
+    <div class="row">
+      <label for="lot">Lot Size</label>
+      <input id="lot" type="number" min="0.01" step="0.01" value="0.10">
     </div>
-
-    <div class="row" style="background:#e8f5e9; border-radius:8px; padding:14px 10px 10px 10px; margin-bottom:8px; align-items:flex-end; box-shadow:0 1px 4px #388e3c20;">
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="mode" style="font-weight:bold; color:#388e3c; margin-bottom:2px;">Mode</label>
-        <select id="mode" style="padding:8px 10px; border-radius:6px; border:1.5px solid #388e3c; font-size:1.1em; background:#fff;">
-          <option>Buy</option>
-          <option>Sell</option>
-        </select>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">Choose Buy or Sell mode</span>
-      </div>
-      <div style="flex:0.2;"></div>
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="lot" style="font-weight:bold; color:#1976d2; margin-bottom:2px;">Lot Size</label>
-      <input id="lot" type="number" min="0.01" step="0.01" value="0.10" style="padding:8px 10px; border-radius:6px; border:1.5px solid #1976d2; font-size:1.1em; background:#fff;">
-      <span id="lot-error" style="color:#d32f2f; font-size:0.95em; margin-top:2px; display:none;"></span>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">Set your trade volume</span>
-      </div>
+    <div class="row">
+      <label for="sl">Stop Loss (pips)</label>
+      <input id="sl" type="number" min="1" step="1" value="20">
     </div>
-    <div class="row" style="background:#fffde7; border-radius:8px; padding:14px 10px 10px 10px; margin-bottom:8px; align-items:flex-end; box-shadow:0 1px 4px #fbc02d20;">
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="sl" style="font-weight:bold; color:#fbc02d; margin-bottom:2px;">Stop Loss (pips)</label>
-      <input id="sl" type="number" min="1" step="1" value="20" style="padding:8px 10px; border-radius:6px; border:1.5px solid #fbc02d; font-size:1.1em; background:#fff;">
-      <span id="sl-error" style="color:#d32f2f; font-size:0.95em; margin-top:2px; display:none;"></span>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">Distance from entry to SL</span>
-      </div>
-      <div style="flex:0.2;"></div>
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="replacements" style="font-weight:bold; color:#6d4c41; margin-bottom:2px;">Max Replacements</label>
-      <input id="replacements" type="number" min="0" step="1" value="2" style="padding:8px 10px; border-radius:6px; border:1.5px solid #6d4c41; font-size:1.1em; background:#fff;">
-      <span id="replacements-error" style="color:#d32f2f; font-size:0.95em; margin-top:2px; display:none;"></span>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">How many times to re-place after SL</span>
-      </div>
+    <div class="row">
+      <label for="rr-risk">Risk [1]</label>
+      <input id="rr-risk" type="number" min="0.01" step="0.01" value="1.00">
     </div>
-    <div class="row" style="background:#e3f2fd; border-radius:8px; padding:14px 10px 10px 10px; margin-bottom:8px; align-items:flex-end; box-shadow:0 1px 4px #1976d220;">
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="rr-risk" style="font-weight:bold; color:#1976d2; margin-bottom:2px;">Risk [1]</label>
-      <input id="rr-risk" type="number" min="0.01" step="0.01" value="1.00" style="padding:8px 10px; border-radius:6px; border:1.5px solid #1976d2; font-size:1.1em; background:#fff;">
-      <span id="rr-risk-error" style="color:#d32f2f; font-size:0.95em; margin-top:2px; display:none;"></span>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">Value at risk</span>
-      </div>
-      <div style="flex:0.2; text-align:center; font-size:1.7em; color:#1976d2; font-weight:bold;">:</div>
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="rr-reward" style="font-weight:bold; color:#388e3c; margin-bottom:2px;">Reward [2]</label>
-      <input id="rr-reward" type="number" min="0.01" step="0.01" value="2.00" style="padding:8px 10px; border-radius:6px; border:1.5px solid #388e3c; font-size:1.1em; background:#fff;">
-      <span id="rr-reward-error" style="color:#d32f2f; font-size:0.95em; margin-top:2px; display:none;"></span>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">Target value</span>
-      </div>
+    <div class="row">
+      <label for="rr-reward">Reward [2]</label>
+      <input id="rr-reward" type="number" min="0.01" step="0.01" value="2.00">
     </div>
-    <div class="row" style="margin-top:-6px; margin-bottom:12px; justify-content:center;">
-      <span style="font-size:1em; color:#1976d2; background:#e0f7fa; border-radius:6px; padding:4px 14px;">Set your desired Risk:Reward as [1]:[2] in value (e.g., 1.00:2.00)</span>
+    <div class="row">
+      <label for="openTime">Opening Time</label>
+      <input id="openTime" type="time" value="09:00">
     </div>
-    <div class="row" style="background:#fff3e0; border-radius:8px; padding:14px 10px 10px 10px; margin-bottom:8px; align-items:flex-end; box-shadow:0 1px 4px #ff980020;">
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="openTime" style="font-weight:bold; color:#f57c00; margin-bottom:2px;">Opening Time</label>
-      <input id="openTime" type="time" value="09:00" style="padding:8px 10px; border-radius:6px; border:1.5px solid #f57c00; font-size:1.1em; background:#fff;">
-      <span id="openTime-error" style="color:#d32f2f; font-size:0.95em; margin-top:2px; display:none;"></span>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">When the first trade will be opened</span>
-      </div>
-      <div style="flex:0.2;"></div>
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="closeTime" style="font-weight:bold; color:#d32f2f; margin-bottom:2px;">Closing Time</label>
-      <input id="closeTime" type="time" value="17:00" style="padding:8px 10px; border-radius:6px; border:1.5px solid #d32f2f; font-size:1.1em; background:#fff;">
-      <span id="closeTime-error" style="color:#d32f2f; font-size:0.95em; margin-top:2px; display:none;"></span>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">When all trades and pending orders will be closed</span>
-      </div>
+    <div class="row">
+      <label for="closeTime">Closing Time</label>
+      <input id="closeTime" type="time" value="17:00">
     </div>
-    <div class="row" style="margin-top:-6px; margin-bottom:12px; justify-content:center;">
-      <span style="font-size:1em; color:#d32f2f; background:#fff3e0; border-radius:6px; padding:4px 14px;">
-        <strong>Note:</strong> Opening Time must be before Closing Time. Both times should be within the same trading day.
-      </span>
+    <div class="row">
+      <label for="replacements">Max Replacements</label>
+      <input id="replacements" type="number" min="0" step="1" value="2">
     </div>
-    <div class="row" style="background:#fffde7; border-radius:8px; padding:14px 10px 10px 10px; margin-bottom:8px; align-items:flex-end; box-shadow:0 1px 4px #fbc02d20;">
-      <div style="flex:1; display:flex; flex-direction:column;">
-        <label for="replacements" style="font-weight:bold; color:#6d4c41; margin-bottom:2px;">Max Replacements</label>
-        <input id="replacements" type="number" min="0" step="1" value="2" style="padding:8px 10px; border-radius:6px; border:1.5px solid #6d4c41; font-size:1.1em; background:#fff;">
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">How many times to re-place after SL</span>
-        <span style="font-size:0.97em; color:#6d4c41; background:#efebe9; border-radius:6px; padding:4px 10px; margin-top:6px;">
-          <strong>What are replacements?</strong> If a trade hits Stop Loss, the EA will automatically place a new pending order at the same entry, SL, and lot size. This repeats up to the Max Replacements value. For example, if set to 2, the EA will try up to 2 additional times after the first loss.
-        </span>
-      </div>
+    <div class="row">
+      <label for="windowStart">Time Window Start</label>
+      <input id="windowStart" type="time">
     </div>
-    <div class="row" style="background:#f3e5f5; border-radius:8px; padding:14px 10px 10px 10px; margin-bottom:8px; align-items:flex-end; box-shadow:0 1px 4px #8e24aa20;">
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="windowStart" style="font-weight:bold; color:#8e24aa; margin-bottom:2px;">Time Window Start</label>
-      <input id="windowStart" type="time" style="padding:8px 10px; border-radius:6px; border:1.5px solid #8e24aa; font-size:1.1em; background:#fff;">
-      <span id="windowStart-error" style="color:#d32f2f; font-size:0.95em; margin-top:2px; display:none;"></span>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">No new trades/replacements after this time</span>
-      </div>
-      <div style="flex:0.2;"></div>
-      <div style="flex:1.5; display:flex; flex-direction:column;">
-        <label for="windowEnd" style="font-weight:bold; color:#5e35b1; margin-bottom:2px;">Time Window End</label>
-      <input id="windowEnd" type="time" style="padding:8px 10px; border-radius:6px; border:1.5px solid #5e35b1; font-size:1.1em; background:#fff;">
-      <span id="windowEnd-error" style="color:#d32f2f; font-size:0.95em; margin-top:2px; display:none;"></span>
-        <span style="font-size:0.85em; color:#888; margin-top:2px;">Trading resumes after this time</span>
-      </div>
-    </div>
-    <div class="row" style="margin-top:-6px; margin-bottom:12px; justify-content:center;">
-      <span style="font-size:1em; color:#5e35b1; background:#f3e5f5; border-radius:6px; padding:4px 14px;">
-        <strong>Note:</strong> Time Window Start must be before Time Window End. Leave both empty to disable the time window.
-      </span>
+    <div class="row">
+      <label for="windowEnd">Time Window End</label>
+      <input id="windowEnd" type="time">
     </div>
     <div class="row">
       <button class="btn" id="startBtn">Start EA</button>
@@ -149,67 +73,27 @@
       <strong>Replacements Left:</strong> 2<br>
       <strong>Time Window:</strong> Not active
     </div>
-    <div class="chart-area">
-      [Chart Area: Entry, SL, TP lines and trade markers would be drawn here]
-    </div>
   </div>
-</div>
 <script>
-// Simple validation and error display for demo purposes
-function showError(id, msg) {
-  var el = document.getElementById(id);
-  if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
-}
-function clearAllErrors() {
-  ["lot-error","sl-error","replacements-error","rr-risk-error","rr-reward-error","openTime-error","closeTime-error","windowStart-error","windowEnd-error"].forEach(function(id){ showError(id,""); });
-}
+// Only basic validation and button logic, as feasible in MT5
 function validateInputs() {
-  clearAllErrors();
   let valid = true;
   const lot = parseFloat(document.getElementById('lot').value);
-  if (isNaN(lot) || lot <= 0) { showError('lot-error','Lot size must be greater than 0.'); valid = false; }
+  if (isNaN(lot) || lot <= 0) valid = false;
   const sl = parseFloat(document.getElementById('sl').value);
-  if (isNaN(sl) || sl < 1) { showError('sl-error','Stop Loss must be at least 1 pip.'); valid = false; }
-  const repl = parseInt(document.getElementById('replacements').value);
-  if (isNaN(repl) || repl < 0) { showError('replacements-error','Max Replacements must be 0 or more.'); valid = false; }
+  if (isNaN(sl) || sl < 1) valid = false;
   const rrRisk = parseFloat(document.getElementById('rr-risk').value);
-  if (isNaN(rrRisk) || rrRisk <= 0) { showError('rr-risk-error','Risk value must be greater than 0.'); valid = false; }
+  if (isNaN(rrRisk) || rrRisk <= 0) valid = false;
   const rrReward = parseFloat(document.getElementById('rr-reward').value);
-  if (isNaN(rrReward) || rrReward <= 0) { showError('rr-reward-error','Reward value must be greater than 0.'); valid = false; }
-  const openTime = document.getElementById('openTime').value;
-  const closeTime = document.getElementById('closeTime').value;
-  if (openTime && closeTime && openTime >= closeTime) {
-    showError('openTime-error','Opening Time must be before Closing Time.');
-    showError('closeTime-error','Closing Time must be after Opening Time.');
-    valid = false;
-  }
-  const windowStart = document.getElementById('windowStart').value;
-  const windowEnd = document.getElementById('windowEnd').value;
-  if (windowStart && windowEnd && windowStart >= windowEnd) {
-    showError('windowStart-error','Time Window Start must be before End.');
-    showError('windowEnd-error','Time Window End must be after Start.');
-    valid = false;
-  }
+  if (isNaN(rrReward) || rrReward <= 0) valid = false;
   return valid;
-}
-function shadowInputs() {
-  var fields = document.querySelectorAll('input, select');
-  fields.forEach(function(f) { f.disabled = true; });
-  document.getElementById('startBtn').disabled = true;
-  document.getElementById('replaceBtn').disabled = true;
-  // Add a visual overlay
-  var overlay = document.createElement('div');
-  overlay.className = 'shadow';
-  overlay.innerHTML = '<div class="shadow-message">Inputs are now locked. The EA is running.<br>To change settings, please stop and reset the EA.</div>';
-  document.body.appendChild(overlay);
 }
 document.getElementById('startBtn').onclick = function(e) {
   if (!validateInputs()) {
     e.preventDefault();
     return false;
   }
-  shadowInputs();
-  // alert('Inputs are valid! (EA would start)');
+  // In MT5, this would trigger EA initialization and lock inputs
 };
 </script>
 </body>

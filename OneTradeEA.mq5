@@ -13,7 +13,9 @@
 #include <Trade/PositionInfo.mqh>
 
 // Remove EasyAndFastGUI includes and use SimpleWindow
-#include <SimplePanel.mqh>
+#include <InterfaceGui.mqh>
+#include <OneTradeEA_Core.mqh>
+#include <EventHandler.mqh>
 
 #ifndef OBJPROP_HEIGHT
 #define OBJPROP_HEIGHT 133
@@ -180,10 +182,10 @@ class TradeManager
                double sl = PositionGetDouble(POSITION_SL);
                double tp = PositionGetDouble(POSITION_TP);
                double priceOpen = PositionGetDouble(POSITION_PRICE_OPEN);
-               double priceCurrent = (InpTradeMode==ORDER_TYPE_BUY) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) : SymbolInfoDouble(Symbol(), SYMBOL_ASK);
+               double priceCurrent = (mainPanel.GetMode()==0) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) : SymbolInfoDouble(Symbol(), SYMBOL_ASK);
                bool closed = false;
                // Check for SL hit
-               if(sl > 0 && ((InpTradeMode == ORDER_TYPE_BUY && priceCurrent <= sl) || (InpTradeMode == ORDER_TYPE_SELL && priceCurrent >= sl)))
+               if(sl > 0 && ((mainPanel.GetMode() == 0 && priceCurrent <= sl) || (mainPanel.GetMode() == 1 && priceCurrent >= sl)))
                  {
                   logger.Log("SL hit. Closing position.");
                   string date = TimeToString(TimeCurrent(), TIME_DATE);
@@ -191,12 +193,12 @@ class TradeManager
                   if(PositionClose(ticket))
                     {
                      logger.Log("Position closed (SL). Ticket: " + IntegerToString(ticket));
-                     logger.LogCSV(date, time, Symbol(), (InpTradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), InpLotSize, sl, tp, "SL", replacementsLeft, "", ticket);
+                     logger.LogCSV(date, time, Symbol(), (mainPanel.GetMode()==0?"BUY":"SELL"), mainPanel.GetLot(), sl, tp, "SL", replacementsLeft, "", ticket);
                     }
                   else
                     {
                      logger.Log("ERROR: Failed to close position (SL). Ticket: " + IntegerToString(ticket));
-                     logger.LogCSV(date, time, Symbol(), (InpTradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), InpLotSize, sl, tp, "SL_FAIL", replacementsLeft, "CLOSE", ticket);
+                     logger.LogCSV(date, time, Symbol(), (mainPanel.GetMode()==0?"BUY":"SELL"), mainPanel.GetLot(), sl, tp, "SL_FAIL", replacementsLeft, "CLOSE", ticket);
                     }
                   tradeActive = false;
                   closed = true;
@@ -212,7 +214,7 @@ class TradeManager
                     }
                  }
                // Check for TP hit
-               if(!closed && tp > 0 && ((InpTradeMode == ORDER_TYPE_BUY && priceCurrent >= tp) || (InpTradeMode == ORDER_TYPE_SELL && priceCurrent <= tp)))
+               if(!closed && tp > 0 && ((mainPanel.GetMode() == 0 && priceCurrent >= tp) || (mainPanel.GetMode() == 1 && priceCurrent <= tp)))
                  {
                   logger.Log("TP hit. Closing position. Trading done for today.");
                   string date = TimeToString(TimeCurrent(), TIME_DATE);
@@ -220,12 +222,12 @@ class TradeManager
                   if(PositionClose(ticket))
                     {
                      logger.Log("Position closed (TP). Ticket: " + IntegerToString(ticket));
-                     logger.LogCSV(date, time, Symbol(), (InpTradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), InpLotSize, sl, tp, "TP", replacementsLeft, "", ticket);
+                     logger.LogCSV(date, time, Symbol(), (mainPanel.GetMode()==0?"BUY":"SELL"), mainPanel.GetLot(), sl, tp, "TP", replacementsLeft, "", ticket);
                     }
                   else
                     {
                      logger.Log("ERROR: Failed to close position (TP). Ticket: " + IntegerToString(ticket));
-                     logger.LogCSV(date, time, Symbol(), (InpTradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), InpLotSize, sl, tp, "TP_FAIL", replacementsLeft, "CLOSE", ticket);
+                     logger.LogCSV(date, time, Symbol(), (mainPanel.GetMode()==0?"BUY":"SELL"), mainPanel.GetLot(), sl, tp, "TP_FAIL", replacementsLeft, "CLOSE", ticket);
                     }
                   tradeActive = false;
                   replacementsLeft = 0;
@@ -269,7 +271,7 @@ class Logger
          int handle = FileOpen(csvFile, FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_READ|FILE_SHARE_WRITE|FILE_SHARE_READ|FILE_APPEND);
          if(handle >= 0)
            {
-            FileWrite(handle, date + "," + time + "," + symbol + "," + tradeType + "," + DoubleToString(lot,2) + "," + DoubleToString(sl,2) + "," + DoubleToString(tp,2) + "," + result + "," + IntegerToString(replacement) + "," + errorCode + "," + IntegerToString((int)ticket));
+            FileWrite(handle, date + "," + time + "," + symbol + "," + tradeType + "," + DoubleToString(lot,2) + "," + DoubleToString(sl,2) + "," + DoubleToString(tp,2) + "," + result + "," + IntegerToString((int)replacement) + "," + errorCode + "," + IntegerToString((int)ticket));
             FileClose(handle);
            }
         }
@@ -281,7 +283,12 @@ TradeManager tradeManager;
 Logger logger;
 
 // Main panel UI
-CSimplePanel mainPanel;
+CInterfaceGui mainPanel;
+
+
+// Define global pointer for coreEA to resolve extern in EventHandler.mqh
+COneTradeEA_Core coreEA_instance;
+COneTradeEA_Core *coreEA = &coreEA_instance;
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -330,15 +337,138 @@ int OnInit()
       logger.Log("ERROR: Invalid Window End format. Use HH:MM or leave empty.");
       return(INIT_FAILED);
      }
-   logger.InitCSV("OneTradeEA_log.csv");
-   tradeManager.Init(InpMaxReplacements, Symbol());
-   timeManager.ParseTimes(InpOpenTime, InpCloseTime, InpWindowStart, InpWindowEnd);
+   // Initialize core EA logic
+   coreEA.Init(
+      InpTradeMode,
+      InpLotSize,
+      InpStopLoss,
+      InpRiskValue,
+      InpRewardValue,
+      InpOpenTime,
+      InpCloseTime,
+      InpMaxReplacements,
+      InpWindowStart,
+      InpWindowEnd,
+      Symbol()
+   );
+   // --- Create minimal UI elements on chart ---
+   int x0 = 30, y0 = 30, w = 120, h = 20, pad = 5;
+   // Mode input (Buy/Sell)
+   ObjectCreate(0, "ModeInput", OBJ_EDIT, 0, 0, 0);
+   ObjectSetInteger(0, "ModeInput", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "ModeInput", OBJPROP_YDISTANCE, y0);
+   ObjectSetInteger(0, "ModeInput", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "ModeInput", OBJPROP_TEXT, (InpTradeMode==ORDER_TYPE_BUY?"Buy":"Sell"));
 
-   // --- Create main panel UI ---
-   mainPanel.Create("OneTradeEA", 30, 30, 540);
+   // Lot size
+   ObjectCreate(0, "LotInput", OBJ_EDIT, 0, 0, 0);
+   ObjectSetInteger(0, "LotInput", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "LotInput", OBJPROP_YDISTANCE, y0+h+pad);
+   ObjectSetInteger(0, "LotInput", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "LotInput", OBJPROP_TEXT, DoubleToString(InpLotSize,2));
+
+   // Stop Loss
+   ObjectCreate(0, "SLInput", OBJ_EDIT, 0, 0, 0);
+   ObjectSetInteger(0, "SLInput", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "SLInput", OBJPROP_YDISTANCE, y0+2*(h+pad));
+   ObjectSetInteger(0, "SLInput", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "SLInput", OBJPROP_TEXT, IntegerToString(InpStopLoss));
+
+   // Risk
+   ObjectCreate(0, "RRInput", OBJ_EDIT, 0, 0, 0);
+   ObjectSetInteger(0, "RRInput", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "RRInput", OBJPROP_YDISTANCE, y0+3*(h+pad));
+   ObjectSetInteger(0, "RRInput", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "RRInput", OBJPROP_TEXT, DoubleToString(InpRiskValue,2));
+
+   // Reward
+   ObjectCreate(0, "RewardInput", OBJ_EDIT, 0, 0, 0);
+   ObjectSetInteger(0, "RewardInput", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "RewardInput", OBJPROP_YDISTANCE, y0+4*(h+pad));
+   ObjectSetInteger(0, "RewardInput", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "RewardInput", OBJPROP_TEXT, DoubleToString(InpRewardValue,2));
+
+   // Opening Time
+   ObjectCreate(0, "OpenTimeInput", OBJ_EDIT, 0, 0, 0);
+   ObjectSetInteger(0, "OpenTimeInput", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "OpenTimeInput", OBJPROP_YDISTANCE, y0+5*(h+pad));
+   ObjectSetInteger(0, "OpenTimeInput", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "OpenTimeInput", OBJPROP_TEXT, InpOpenTime);
+
+   // Closing Time
+   ObjectCreate(0, "CloseTimeInput", OBJ_EDIT, 0, 0, 0);
+   ObjectSetInteger(0, "CloseTimeInput", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "CloseTimeInput", OBJPROP_YDISTANCE, y0+6*(h+pad));
+   ObjectSetInteger(0, "CloseTimeInput", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "CloseTimeInput", OBJPROP_TEXT, InpCloseTime);
+
+   // Max Replacements
+   ObjectCreate(0, "ReplaceInput", OBJ_EDIT, 0, 0, 0);
+   ObjectSetInteger(0, "ReplaceInput", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "ReplaceInput", OBJPROP_YDISTANCE, y0+7*(h+pad));
+   ObjectSetInteger(0, "ReplaceInput", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "ReplaceInput", OBJPROP_TEXT, IntegerToString(InpMaxReplacements));
+
+   // Time Window
+   ObjectCreate(0, "TimeWindowInput", OBJ_EDIT, 0, 0, 0);
+   ObjectSetInteger(0, "TimeWindowInput", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "TimeWindowInput", OBJPROP_YDISTANCE, y0+8*(h+pad));
+   ObjectSetInteger(0, "TimeWindowInput", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "TimeWindowInput", OBJPROP_TEXT, InpWindowStart);
+
+   // Start EA Button
+   ObjectCreate(0, "StartEAButton", OBJ_BUTTON, 0, 0, 0);
+   ObjectSetInteger(0, "StartEAButton", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "StartEAButton", OBJPROP_YDISTANCE, y0+9*(h+pad));
+   ObjectSetInteger(0, "StartEAButton", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "StartEAButton", OBJPROP_TEXT, "Start EA");
+
+   // Replace Order Button
+   ObjectCreate(0, "ReplaceOrderButton", OBJ_BUTTON, 0, 0, 0);
+   ObjectSetInteger(0, "ReplaceOrderButton", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "ReplaceOrderButton", OBJPROP_YDISTANCE, y0+10*(h+pad));
+   ObjectSetInteger(0, "ReplaceOrderButton", OBJPROP_WIDTH, (long)w);
+   ObjectSetString(0, "ReplaceOrderButton", OBJPROP_TEXT, "Replace Order");
+
+   // Status Label
+   ObjectCreate(0, "StatusLabel", OBJ_LABEL, 0, 0, 0);
+   ObjectSetInteger(0, "StatusLabel", OBJPROP_XDISTANCE, x0);
+   ObjectSetInteger(0, "StatusLabel", OBJPROP_YDISTANCE, y0+11*(h+pad));
+   ObjectSetInteger(0, "StatusLabel", OBJPROP_WIDTH, (long)(w*2));
+   ObjectSetString(0, "StatusLabel", OBJPROP_TEXT, "Ready");
+
    ChartRedraw(0);
-   logger.Log("Initialized. Magic: " + tradeManager.magicNumber);
+   logger.Log("Initialized. Magic: " + Symbol() + "_OneTradeEA");
    return(INIT_SUCCEEDED);
+  }
+
+void OnTick()
+  {
+   string status = "OneTradeEA Running\n";
+   status += "Mode: " + (mainPanel.GetMode()==0?"BUY":"SELL") + "\n";
+   status += "Lot: " + DoubleToString(mainPanel.GetLot(),2) + "\n";
+   status += "SL: " + IntegerToString(mainPanel.GetSL()) + "\n";
+   status += "Risk: " + DoubleToString(mainPanel.GetRisk(),2) + "\n";
+   status += "Reward: " + DoubleToString(mainPanel.GetReward(),2) + "\n";
+   status += "Open: " + mainPanel.GetOpenTime() + "\n";
+   status += "Close: " + mainPanel.GetCloseTime() + "\n";
+   status += "Repl left: " + IntegerToString(mainPanel.GetRepl());
+   Comment(status);
+   // Call core EA trade monitoring
+   coreEA.MonitorTrades();
+   // --- Handle daily reset and open/close times ---
+   static int lastDay = -1;
+   MqlDateTime dt; TimeToStruct(TimeCurrent(), dt);
+   if(dt.day != lastDay) {
+      lastDay = dt.day;
+      coreEA.OnNewDay();
+   }
+   // Open first trade at opening time
+   if(TimeToStr(TimeCurrent(), 0) == InpOpenTime)
+      coreEA.OpenFirstTrade();
+   // Close all at closing time
+   if(TimeToStr(TimeCurrent(), 0) == InpCloseTime)
+      coreEA.OnCloseTime();
   }
 
 //+------------------------------------------------------------------+
@@ -352,64 +482,9 @@ void OnDeinit(const int reason)
   }
 
 //+------------------------------------------------------------------+
-//| Expert tick function                                             |
+//| Chart event handler: wire up UI events to EventHandler.mqh      |
 //+------------------------------------------------------------------+
-void OnTick()
-  {
-   datetime now = TimeCurrent();
-   // Check if within time window (if enabled)
-   if(timeManager.IsInTimeWindow(now))
-     {
-      // No new trades or replacements
-      return;
-     }
-   // Daily reset logic (simplified)
-   if(timeManager.IsNewDay(now))
-     {
-      tradeManager.Reset(InpMaxReplacements);
-     }
-   // Open first trade at opening time
-   if(!tradeManager.tradeActive && !tradeManager.pendingOrderActive && TimeToStr(now, TIME_MINUTES) == TimeToStr(timeManager.openTime, TIME_MINUTES))
-     {
-      tradeManager.OpenFirstTrade();
-     }
-   // Monitor trade and handle SL/TP/replacements
-   if(tradeManager.tradeActive)
-     {
-      tradeManager.MonitorTrades();
-     }
-  }
-
-//+------------------------------------------------------------------+
-//| Chart event handler for button clicks                           |
-//+------------------------------------------------------------------+
-void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
-  {
-   if(id == CHARTEVENT_OBJECT_CLICK)
-     {
-      if(sparam == "OneTradeEA_btn_start")
-        {
-         mainPanel.SetStatus("Status: EA Started\nActive Trade: ...\nPending Order: ...\nReplacements Left: ...\nTime Window: ...");
-         tradeManager.OpenFirstTrade();
-         ChartRedraw(0);
-        }
-      else if(sparam == "OneTradeEA_btn_replace")
-        {
-         mainPanel.SetStatus("Status: Replacing Order...\nActive Trade: ...\nPending Order: ...\nReplacements Left: ...\nTime Window: ...");
-         if(tradeManager.replacementsLeft > 0)
-           {
-            tradeManager.replacementsLeft--;
-            tradeManager.OpenFirstTrade();
-           }
-         else
-           {
-            mainPanel.SetStatus("Status: No replacements left\nActive Trade: ...\nPending Order: ...\nReplacements Left: 0\nTime Window: ...");
-           }
-         ChartRedraw(0);
-        }
-     }
-  }
-
+// OnChartEvent is handled via EventHandler.mqh
 //+------------------------------------------------------------------+
 //| Helper: Parse time string (HH:MM) to datetime (today)           |
 //+------------------------------------------------------------------+
