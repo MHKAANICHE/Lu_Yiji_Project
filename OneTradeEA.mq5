@@ -4,13 +4,20 @@
 #ifndef DEAL_TYPE_SL
 #define DEAL_TYPE_SL 2
 #endif
+#ifndef DEAL_TYPE_TP
+#define DEAL_TYPE_TP 3
+#endif
 
 void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest &request, const MqlTradeResult &result)
+   Print("[OneTradeEA][DEBUG] OnTradeTransaction called: trans.type=", trans.type, " deal_type=", trans.deal_type, " symbol=", trans.symbol, " price=", trans.price, " volume=", trans.volume);
+   ulong deal_ticket_dbg = trans.deal;
+   string deal_comment_dbg = "";
+   if(deal_ticket_dbg > 0) deal_comment_dbg = HistoryDealGetString(deal_ticket_dbg, DEAL_COMMENT);
+   Print("[OneTradeEA][DEBUG] Deal ticket=", deal_ticket_dbg, " comment=", deal_comment_dbg);
 {
    // Only interested in deals (not orders, not position changes)
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
    {
-      // Get deal info
       ulong deal_ticket = trans.deal;
       long deal_type = trans.deal_type;
       string deal_symbol = trans.symbol;
@@ -20,6 +27,11 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
       // Only process for our symbol
       if(deal_symbol == Symbol())
       {
+         // Get comment from history (to match EA trades)
+         string deal_comment = HistoryDealGetString(deal_ticket, DEAL_COMMENT);
+         // Only process if comment matches our EA's format
+         bool isOurTrade = (StringFind(deal_comment, "ORIGINAL_") == 0 || StringFind(deal_comment, "REPLACEMENT_") == 0);
+         if(!isOurTrade) return;
          // SL hit
          if(deal_type == DEAL_TYPE_SL)
          {
@@ -28,9 +40,41 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
             ObjectSetInteger(0, vline_name, OBJPROP_COLOR, clrRed);
             ObjectSetInteger(0, vline_name, OBJPROP_WIDTH, 2);
             Print("[OneTradeEA][DEBUG] SL detected by OnTradeTransaction. Vertical line drawn at ", TimeToString(deal_time, TIME_SECONDS), " for ticket ", deal_ticket);
-            Print("[OneTradeEA][DEBUG] coreEA pointer: ", &coreEA);
-            // TODO: Implement LogSLHit in COneTradeEA_Core if needed
-            // coreEA.LogSLHit(deal_time, deal_symbol, deal_price, deal_volume, deal_ticket);
+            // Log SL event
+            coreEA.LogCSV(TimeToString(deal_time, TIME_DATE), TimeToString(deal_time, TIME_SECONDS), deal_symbol, (InpTradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), deal_volume, 0, 0, "SL", 0, "", deal_ticket);
+            // Replacement logic: only if allowed and no pending order exists
+            if(coreEA.HasPendingOrder()) return;
+            // Decrement score if possible (parse from comment)
+            int score = 0;
+            if(StringFind(deal_comment, "ORIGINAL_") == 0)
+               score = StringToInteger(StringSubstr(deal_comment, 9));
+            else if(StringFind(deal_comment, "REPLACEMENT_") == 0)
+               score = StringToInteger(StringSubstr(deal_comment, 12));
+            if(score > 0)
+            {
+               Print("[OneTradeEA][DEBUG] Placing replacement pending order after SL. score=", score-1);
+               // Set up currentTrade for replacement
+               coreEA.currentTrade.score = score-1;
+               coreEA.currentTrade.comment = "REPLACEMENT_" + IntegerToString(score-1);
+               // Place the replacement pending order at the SL price of the closed position
+               coreEA.currentTrade.entryPrice = deal_price; // SL price where position was closed
+               coreEA.currentTrade.sl = deal_price;         // Set SL for the new pending order to the same SL price
+               coreEA.pendingOrderActive = true;
+               Print("[OneTradeEA][DEBUG] Calling OpenPendingOrder with entry=", coreEA.currentTrade.entryPrice, " sl=", coreEA.currentTrade.sl);
+               coreEA.OpenPendingOrder(coreEA.currentTrade.entryPrice, coreEA.currentTrade.sl);
+               Print("[OneTradeEA][DEBUG] OpenPendingOrder call finished");
+            }
+         }
+         // TP hit
+         else if(deal_type == DEAL_TYPE_TP)
+         {
+            string vline_name = "TP_HIT_" + IntegerToString(deal_ticket) + "_" + TimeToString(deal_time, TIME_SECONDS);
+            ObjectCreate(0, vline_name, OBJ_VLINE, 0, deal_time, 0);
+            ObjectSetInteger(0, vline_name, OBJPROP_COLOR, clrGreen);
+            ObjectSetInteger(0, vline_name, OBJPROP_WIDTH, 2);
+            Print("[OneTradeEA][DEBUG] TP detected by OnTradeTransaction. Vertical line drawn at ", TimeToString(deal_time, TIME_SECONDS), " for ticket ", deal_ticket);
+            // Log TP event
+            coreEA.LogCSV(TimeToString(deal_time, TIME_DATE), TimeToString(deal_time, TIME_SECONDS), deal_symbol, (InpTradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), deal_volume, 0, 0, "TP", 0, "", deal_ticket);
          }
       }
    }
@@ -89,7 +133,7 @@ string TimeToStr(datetime t, int mode=0) {
 
 input ENUM_ORDER_TYPE   InpTradeMode = ORDER_TYPE_BUY; // Trade Mode (Buy/Sell)
 input double            InpLotSize   = 0.10;           // Lot Size
-input double            InpRiskValue = 1.00;           // Risk Amount ($) - The maximum dollar amount you are willing to risk per trade
+input double            InpSLDistance = 20.00;         // Stop Loss Distance (in price units, e.g. $20 for BTCUSD, 20 points for XAUUSD)
 input double            InpRewardValue = 2.00;         // Risk:Reward Ratio (e.g., 2 for 1:2)
 input string            InpOpenTime  = "09:00:00";     // Opening Time (HH:MM:SS)
 input string            InpCloseTime = "17:00:00";     // Closing Time (HH:MM:SS)
@@ -112,9 +156,11 @@ int OnInit()
       return(INIT_FAILED);
    }
    // Initialize core EA logic
-   // Note: InpRiskValue is now the dollar risk, InpStopLoss removed
-   coreEA.Init(InpTradeMode, InpLotSize, InpRiskValue, InpRewardValue, InpOpenTime, InpCloseTime, InpMaxReplacements, InpWindowStart, InpWindowEnd, Symbol());
+   // InpSLDistance is now the stop loss distance in price units (not dollar risk)
+   coreEA.Init(InpTradeMode, InpLotSize, InpSLDistance, InpRewardValue, InpOpenTime, InpCloseTime, InpMaxReplacements, InpWindowStart, InpWindowEnd, Symbol());
    Print("Initialized. Magic: " + Symbol() + "_OneTradeEA");
+   extern bool firstTradeOpened = false; // Ensure flag is reset on EA start
+   firstTradeOpened = false;
    return(INIT_SUCCEEDED);
   }
 
@@ -123,22 +169,20 @@ void OnTick()
    // Call core EA trade monitoring
    coreEA.MonitorTrades();
    // --- Handle daily reset and open/close times ---
-   static int lastDay = -1;
-   MqlDateTime dt; TimeToStruct(TimeCurrent(), dt);
-   if(dt.day != lastDay) {
-      lastDay = dt.day;
-      coreEA.OnNewDay();
-   }
-   // Open first trade at opening time (use full HH:MM:SS comparison)
-   string nowStr = TimeToStr(TimeCurrent(), 1); // HH:MM:SS
-   // Only open a new market order if there is no active trade and no pending order
-   if(nowStr == InpOpenTime && !coreEA.IsTradeActive() && !coreEA.HasPendingOrder())
+   // Removed daily restriction: allow new trade at opening time whenever there is no active or pending trade
+   // Only open the first trade automatically if there has never been a trade (e.g. at EA start)
+   extern bool firstTradeOpened;
+   if(!firstTradeOpened && !coreEA.IsTradeActive() && !coreEA.HasPendingOrder())
    {
       coreEA.OpenFirstTrade();
+      firstTradeOpened = true;
    }
    // Close all at closing time
    if(TimeToStr(TimeCurrent(), 0) == InpCloseTime)
+   {
       coreEA.OnCloseTime();
+      firstTradeOpened = false; // Allow new first trade after daily close
+   }
   }
 
 void OnDeinit(const int reason)

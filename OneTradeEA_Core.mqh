@@ -1,6 +1,8 @@
 //+------------------------------------------------------------------+
 //| OneTradeEA_Core.mqh                                              |
 //| Implements the core logic for One Trade EA as per requirements   |
+//| SL is a price distance (e.g. $20 for BTCUSD, 20 points for XAUUSD),
+//| not a dollar risk. Lot size is independent of SL calculation.    |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| OneTradeEA_Core.mqh                                              |
@@ -30,13 +32,12 @@ struct TradeInfo {
 class COneTradeEA_Core {
 // --- State Variables ---
 private:
-   TradeInfo currentTrade; // Current trade or pending order info
    double originalEntryPrice;
    double originalSL;
    double originalTP;
    ENUM_ORDER_TYPE tradeMode;
    double lotSize;
-   double riskValue; // Dollar risk per trade (client input)
+   double slDistance; // Stop loss distance in price units (e.g. $20 for BTCUSD, 20 points for XAUUSD)
    double rewardValue;
    string openTime;
    string closeTime;
@@ -46,11 +47,14 @@ private:
    int replacementsLeft;
    ulong lastOrderTicket;
    bool tradeActive;
-   bool pendingOrderActive;
    string csvFileName;
    string m_symbol;
    string magicNumber;
    bool timeWindowEnabled;
+
+public:
+   TradeInfo currentTrade; // Exposed for event-driven access
+   bool pendingOrderActive; // Exposed for event-driven access
 
 public:
    // Generate a unique CSV file name for logging
@@ -119,7 +123,7 @@ public:
    void Init(
       ENUM_ORDER_TYPE mode,
       double lot,
-      double risk, // Dollar risk per trade
+      double sl_dist, // Stop loss distance in price units
       double reward,
       string open,
       string close,
@@ -131,7 +135,7 @@ public:
    {
       tradeMode = mode;
       lotSize = lot;
-      riskValue = risk;
+      slDistance = sl_dist;
       rewardValue = reward;
       openTime = open;
       closeTime = close;
@@ -176,21 +180,18 @@ public:
       pendingOrderActive = false;
    }
 
-   // Calculate price distance for SL/TP based on dollar risk
-   double CalculateSLDistance()
-   {
-      double tickValue = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_VALUE);
-      double tickSize = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_SIZE);
+   // Return the user-defined SL distance (in price units, e.g. $20 for BTCUSD, 20 points for XAUUSD)
+   // Also provide conversion to pips for robust calculation
+   double GetSLDistancePrice() { return slDistance; }
+   double GetSLDistancePips() {
       double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
-      if(tickValue <= 0 || tickSize <= 0 || point <= 0) {
-         Print("[OneTradeEA][ERROR] Invalid tickValue/tickSize/point for symbol ", m_symbol);
-         return 0;
-      }
-      // How many price units (in points) for the given dollar risk
-      double sl_distance = (riskValue / (tickValue * lotSize)) * tickSize / point;
-      return sl_distance * point;
+      if(point <= 0) return 0;
+      return slDistance / point;
    }
 
+   // Open the first trade of the day. SL/TP are set robustly using broker pip/digit info.
+   // For BUY: SL = entry - slDistance; TP = entry + (slDistance * rewardValue)
+   // For SELL: SL = entry + slDistance; TP = entry - (slDistance * rewardValue)
    void OpenFirstTrade()
    {
       double price = (tradeMode == ORDER_TYPE_BUY) ? SymbolInfoDouble(m_symbol, SYMBOL_ASK) : SymbolInfoDouble(m_symbol, SYMBOL_BID);
@@ -210,11 +211,13 @@ public:
          return;
       }
       double rr = rewardValue; // R:R ratio (e.g., 2 for 1:2)
-      double sl_distance = CalculateSLDistance();
+      double sl_distance = GetSLDistancePrice();
       if(sl_distance <= 0) {
-         Print("[OneTradeEA][ERROR] SL distance calculation failed");
+         Print("[OneTradeEA][ERROR] SL distance must be positive");
          return;
       }
+      // Convert to pips for info/debug
+      double sl_pips = sl_distance / point;
       double sl = 0, tp = 0;
       if(tradeMode == ORDER_TYPE_BUY)
       {
@@ -226,6 +229,10 @@ public:
          sl = price + sl_distance;
          tp = price - (sl_distance * rr);
       }
+      // Normalize all price levels
+      sl = NormalizeDouble(sl, digits);
+      tp = NormalizeDouble(tp, digits);
+      price = NormalizeDouble(price, digits);
       // Initialize currentTrade for the original position
       currentTrade.entryPrice = price;
       currentTrade.sl = sl;
@@ -235,8 +242,9 @@ public:
       currentTrade.comment = "ORIGINAL_" + IntegerToString(maxReplacements);
       // ...existing code for pip values, request, and order send logic...
       double pipSize = (digits == 3 || digits == 5) ? point * 10 : point;
-      double sl_pips = MathAbs(price - sl) / pipSize;
+      double sl_pips2 = MathAbs(price - sl) / pipSize;
       double tp_pips = MathAbs(tp - price) / pipSize;
+      Print("[OneTradeEA][DEBUG] SL distance input=", sl_distance, " (", sl_pips, " pips), normalized SL=", sl, " TP=", tp, " entry=", price);
       MqlTradeRequest request;
       MqlTradeResult result;
       ZeroMemory(request);
@@ -245,8 +253,8 @@ public:
       request.volume = lotSize;
       request.type = tradeMode;
       request.price = price;
-      request.sl = NormalizeDouble(sl, digits);
-      request.tp = NormalizeDouble(tp, digits);
+      request.sl = sl;
+      request.tp = tp;
       request.deviation = 10;
       request.magic = 0;
       request.comment = currentTrade.comment;
@@ -284,12 +292,11 @@ public:
       currentTrade.ticket = result.order;
       // Log successful order open with calculated SL/TP in price
       LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "OPEN", currentTrade.score, "", result.order);
-
    }
 
    void MonitorTrades()
    {
-      // Check if any position is open for this EA
+      // Passive/event-driven: Only update currentTrade for tracking, do not act on trades.
       bool found = false;
       for(int i=0; i<PositionsTotal(); i++)
       {
@@ -298,100 +305,32 @@ public:
          if(PositionGetString(POSITION_SYMBOL) == m_symbol && (StringFind(comment, "ORIGINAL_") == 0 || StringFind(comment, "REPLACEMENT_") == 0))
          {
             found = true;
-            double sl = PositionGetDouble(POSITION_SL);
-            double tp = PositionGetDouble(POSITION_TP);
-            double priceCurrent = (tradeMode==ORDER_TYPE_BUY) ? SymbolInfoDouble(m_symbol, SYMBOL_BID) : SymbolInfoDouble(m_symbol, SYMBOL_ASK);
-            // Parse score from comment
+            // Update currentTrade from position info for tracking only
             int score = 0;
             if(StringFind(comment, "ORIGINAL_") == 0)
                score = StringToInteger(StringSubstr(comment, 9));
             else if(StringFind(comment, "REPLACEMENT_") == 0)
                score = StringToInteger(StringSubstr(comment, 12));
-            // Update currentTrade from position info
             currentTrade.entryPrice = PositionGetDouble(POSITION_PRICE_OPEN);
-            currentTrade.sl = sl;
-            currentTrade.tp = tp;
+            currentTrade.sl = PositionGetDouble(POSITION_SL);
+            currentTrade.tp = PositionGetDouble(POSITION_TP);
             currentTrade.lot = PositionGetDouble(POSITION_VOLUME);
             currentTrade.score = score;
             currentTrade.comment = comment;
             currentTrade.ticket = ticket;
-            // Only print when SL is hit (see below)
-            // If a pending order was active and now a position is open, reset state and print clear debug message
+            // If a pending order was active and now a position is open, update state for tracking
             if(pendingOrderActive && !tradeActive)
             {
                Print("[OneTradeEA][DEBUG] Position opened from pending order. Core logic: tradeActive set to true, pendingOrderActive set to false. Replacement score now: ", currentTrade.score);
                tradeActive = true;
                pendingOrderActive = false;
             }
-            Print("    timeWindow=", IsInTimeWindow(TimeCurrent()));
-
-            // Draw vertical line at SL hit
-            string vline_name = "SL_HIT_" + IntegerToString(ticket) + "_" + TimeToString(TimeCurrent(), TIME_SECONDS);
-            datetime vline_time = TimeCurrent();
-            ObjectCreate(0, vline_name, OBJ_VLINE, 0, vline_time, 0);
-            ObjectSetInteger(0, vline_name, OBJPROP_COLOR, clrRed);
-            ObjectSetInteger(0, vline_name, OBJPROP_WIDTH, 2);
-
-            if(PositionCloseHelper(ticket))
-            {
-               LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "SL", currentTrade.score, "", ticket);
-            }
-            else
-            {
-               LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "SL_FAIL", currentTrade.score, "CLOSE", ticket);
-            }
-            // Only place replacement if not in time window, score > 0, and no pending order exists
-            tradeActive = false;
-            bool hasPending = HasPendingOrder();
-            Print("[OneTradeEA][DEBUG] HasPendingOrder() result: ", hasPending);
-            if(currentTrade.score > 0 && !IsInTimeWindow(TimeCurrent()) && !hasPending)
-            {
-               Print("[OneTradeEA][DEBUG] Condition met for pending order: score > 0, not in time window, no pending order exists.");
-               Print("[OneTradeEA][DEBUG] Attempting to place pending order after SL. score=", currentTrade.score-1);
-               currentTrade.score--;
-               currentTrade.comment = "REPLACEMENT_" + IntegerToString(currentTrade.score);
-               pendingOrderActive = true;
-               // Use original entry/SL for pending order
-               OpenPendingOrder(currentTrade.entryPrice, currentTrade.sl);
-               Print("[OneTradeEA][DEBUG] State AFTER pending order logic:");
-               Print("    tradeActive=", tradeActive);
-               Print("    pendingOrderActive=", pendingOrderActive);
-               Print("    score=", currentTrade.score);
-            }
-            else
-            {
-               Print("[OneTradeEA][DEBUG] Condition NOT met for pending order. State:");
-               Print("    score=", currentTrade.score);
-               Print("    pendingOrderActive=", pendingOrderActive);
-               Print("    timeWindow=", IsInTimeWindow(TimeCurrent()));
-               Print("[OneTradeEA][DEBUG] Pending order NOT placed after SL.");
-               if(hasPending)
-                  Print("[OneTradeEA][DEBUG] Pending order block is activated: HasPendingOrder()=true");
-            }
+            // Removed debug print for timeWindow
+            // No trade actions here. All SL/TP/replacement logic is handled in OnTradeTransaction.
             return; // Only handle one position per tick
          }
-         // TP hit
-         double tp = PositionGetDouble(POSITION_TP);
-         double sl = PositionGetDouble(POSITION_SL);
-         double priceCurrent = (tradeMode==ORDER_TYPE_BUY) ? SymbolInfoDouble(m_symbol, SYMBOL_BID) : SymbolInfoDouble(m_symbol, SYMBOL_ASK);
-         if(tp > 0 && ((tradeMode == ORDER_TYPE_BUY && priceCurrent >= tp) || (tradeMode == ORDER_TYPE_SELL && priceCurrent <= tp)))
-         {
-            Print("[OneTradeEA][DEBUG] Position closed at TP. tradeActive=", tradeActive, " pendingOrderActive=", pendingOrderActive, " score=", currentTrade.score);
-            if(PositionCloseHelper(ticket))
-            {
-               LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "TP", currentTrade.score, "", ticket);
-            }
-            else
-            {
-               LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "TP_FAIL", currentTrade.score, "CLOSE", ticket);
-            }
-            tradeActive = false;
-            currentTrade.score = 0;
-            pendingOrderActive = false;
-            return;
-         }
       }
-      // If no position found, set tradeActive to false
+      // If no position found, set tradeActive to false (for tracking only)
       tradeActive = found;
    }
 
@@ -403,10 +342,43 @@ public:
          Print("[OneTradeEA][ERROR] Failed to get digits for symbol ", m_symbol);
          return;
       }
+      double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
+      if(point <= 0) {
+         Print("[OneTradeEA][ERROR] Failed to get point for symbol ", m_symbol);
+         return;
+      }
+      double ask = SymbolInfoDouble(m_symbol, SYMBOL_ASK);
+      double stops_level = SymbolInfoInteger(m_symbol, SYMBOL_TRADE_STOPS_LEVEL);
+      double min_distance = stops_level * point;
       // Use currentTrade info for the replacement pending order
       double entry = currentTrade.entryPrice;
-      double sl_val = currentTrade.sl;
-      double tp_val = currentTrade.tp;
+      double sl_distance = GetSLDistancePrice();
+      double rr = rewardValue;
+      double sl = 0, tp = 0;
+      if(tradeMode == ORDER_TYPE_BUY)
+      {
+         // For BUY_STOP, ensure price is above Ask + stops_level
+         Print("[OneTradeEA][DEBUG] BUY_STOP: entry=", entry, " Ask=", ask, " stops_level=", stops_level, " min_distance=", min_distance);
+         double min_valid_price = ask + min_distance;
+         if(entry <= min_valid_price) {
+            Print("[OneTradeEA][WARNING] BUY_STOP price invalid (<= Ask+stops_level). Adjusting from ", entry, " to ", min_valid_price);
+            entry = min_valid_price;
+         }
+         sl = entry - sl_distance;
+         tp = entry + (sl_distance * rr);
+      }
+      else // SELL_STOP
+      {
+         sl = entry + sl_distance;
+         tp = entry - (sl_distance * rr);
+      }
+      // Normalize all price levels
+      entry = NormalizeDouble(entry, digits);
+      sl = NormalizeDouble(sl, digits);
+      tp = NormalizeDouble(tp, digits);
+      // Debug output
+      double sl_pips = sl_distance / point;
+      Print("[OneTradeEA][DEBUG] Pending SL distance input=", sl_distance, " (", sl_pips, " pips), normalized SL=", sl, " TP=", tp, " entry=", entry);
       MqlTradeRequest request;
       MqlTradeResult result;
       ZeroMemory(request);
@@ -418,9 +390,9 @@ public:
          request.type = ORDER_TYPE_BUY_STOP;
       else
          request.type = ORDER_TYPE_SELL_STOP;
-      request.price = NormalizeDouble(entry, digits);
-      request.sl = NormalizeDouble(sl_val, digits);
-      request.tp = NormalizeDouble(tp_val, digits);
+      request.price = entry;
+      request.sl = sl;
+      request.tp = tp;
       request.deviation = 10;
       request.magic = 0;
       // Always use comment format "REPLACEMENT_N" for replacements
@@ -447,25 +419,31 @@ public:
       for(int i=0; i<3 && !orderSent; i++) {
          int mode = try_modes[i];
          request.type_filling = (ENUM_ORDER_TYPE_FILLING)mode;
-         if(OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE) {
+         bool sendResult = OrderSend(request, result);
+         Print("[OneTradeEA][DEBUG] OrderSend (try mode ", mode, ") result=", sendResult, " retcode=", result.retcode);
+         if(sendResult && result.retcode == TRADE_RETCODE_DONE) {
             orderSent = true;
          }
       }
       // As last resort, try the default mode
       if(!orderSent) {
          request.type_filling = (ENUM_ORDER_TYPE_FILLING)filling_mode;
-         if(OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE) {
+         bool sendResult = OrderSend(request, result);
+         Print("[OneTradeEA][DEBUG] OrderSend (default mode) result=", sendResult, " retcode=", result.retcode);
+         if(sendResult && result.retcode == TRADE_RETCODE_DONE) {
             orderSent = true;
          }
       }
       if(!orderSent) {
-         LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl_val, tp_val, "PendingOrderFail", currentTrade.score, IntegerToString((int)result.retcode), 0);
+         Print("[OneTradeEA][ERROR] Pending order send failed. retcode=", result.retcode);
+         LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "PendingOrderFail", currentTrade.score, IntegerToString((int)result.retcode), 0);
          pendingOrderActive = false;
          return;
       }
+      Print("[OneTradeEA][DEBUG] Pending order placed successfully. Ticket=", result.order);
       pendingOrderActive = true;
       currentTrade.ticket = result.order;
-      LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl_val, tp_val, "PENDING", currentTrade.score, "", result.order);
+      LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "PENDING", currentTrade.score, "", result.order);
    }
 
    void RemovePendingOrders()
