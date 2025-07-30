@@ -1,43 +1,54 @@
-# One Trade EA for MetaTrader 5
 
+# One Trade EA Project (UpWork Contract)
 
-## Technical Overview
+## Project Overview
 
-This Expert Advisor (EA) implements the technical requirements for the "One Trade EA" strategy on MetaTrader 5. It provides robust, automated trading logic and comprehensive CSV logging for backtesting and analysis. All graphical and UI code has been removed; only technical trading and CSV output remain.
+This repository contains the development of the "One Trade EA" (Expert Advisor) for MetaTrader platforms, originally contracted via UpWork. The EA implements a time-based, single-trade strategy with robust flag-driven logic and comprehensive CSV logging for backtesting and analysis.
 
-## Features & Achievements
+### EA Functionalities
 
+- **Trade Mode:** Select Buy or Sell for the day.
+- **Lot Size:** Configurable per trade.
+- **Stop Loss (SL):** Set maximum dollar risk per trade.
+- **Take Profit (TP):** Risk:Reward ratio, optional.
+- **Opening/Closing Time:** Precise control over trade entry and exit.
+- **Max Replacements:** Retry logic after SL, with pending orders at the same entry.
+- **Time Window:** Disable replacements during specified periods.
+- **CSV Logging:** All trades and events are logged for analysis.
 
+For a detailed technical flow, see the [OrderFlags_TechnicalDoc.md](./OrderFlags_TechnicalDoc.md).
 
-### Input Parameters
+---
 
-- Trade Mode: Choose Buy or Sell mode for the day
-- Lot Size: Set your desired lot size for each trade
-- Stop Loss (in dollars): Set the maximum dollar risk per trade (not pips)
-- Take Profit (Risk:Reward ratio): Set your desired risk:reward (e.g., 2 for 1:2). Leave empty or 0 for no take profit
-- Opening Time (HH:MM:SS): The exact time the first trade will be opened each day
-- Closing Time (HH:MM:SS): The time all trades and pending orders will be closed
-- Max Replacements: Number of times to retry after a stop loss (pending order is placed at same entry)
-- Time Window Start (HH:MM:SS, optional): Start of period when replacements are disabled
-- Time Window End (HH:MM:SS, optional): End of period when replacements are disabled
+## MT5 Backtesting Challenge
 
+During development, a critical limitation was discovered in MetaTrader 5 (MT5) backtesting: the platform does not reliably trigger trade events (`OnTradeTransaction`) in the Strategy Tester, making it impossible to detect whether a position was closed by SL or TP in real time. This led to an untrusted solution for professional backtest execution.
 
-### Technical Trading Logic
+Despite providing technical proofs and a price-based workaround ([see details](./MT5_Backtest_SLTP_Limitation_and_Workaround.md)), the client was dissatisfied and closed the contract. As a result, the EA was redeveloped for MetaTrader 4 (MT4), where event-driven logic is reliable.
 
-- At the exact Opening Time, the EA places a Buy or Sell trade (as selected in the input menu), with the lot size, stop loss, and take profit you set.
-- No other technical or price-based entry conditions are used—entry is strictly time-based.
-- If a trade hits Stop Loss, a pending order is placed at the same entry price (up to Max Replacements).
-- Trades are closed at Take Profit (if set) or at the Closing Time.
-- At Closing Time, all trades and pending orders are closed/removed.
-- Time Window disables replacements during the specified period.
-- The EA resets daily for a new trading cycle.
+---
 
+## Outcome & Future Work
 
+While the contract was closed unsuccessfully, this repository stands as a technical reference and proof of the challenges faced. The project demonstrates advanced EA design, robust state management, and transparent documentation.
 
-### CSV Logging
+**We are open for new projects and collaborations.**  
+If you are a future contractor or client, feel free to reach out for EA development, trading automation, or technical consulting.
 
-- All trades (opened/closed) are logged to a CSV file: Date, Time, Symbol, TradeType, Lot, SL, TP, Result, Replacement, ErrorCode, Ticket.
-- Each backtest/run produces a unique CSV file (symbol, date, random number).
+---
+
+## Files
+
+- `OneTradeFlagEA.mq4`: MQL4 EA implementing the full flag-driven logic.
+- `OrderFlags_TechnicalDoc.md`: Technical flow diagrams and logic documentation.
+- `MT5_Backtest_SLTP_Limitation_and_Workaround.md`: Details on MT5 backtesting limitations.
+- `SimpleOneTradeEA_CodeFlow.md`: Code flow for the simplified EA.
+- `README.md`: Project summary and context.
+
+---
+
+**Contact:**  
+Open for new contracts and technical partnerships.
 - **CSV file location:** By default, the CSV file is created in the MetaTrader 5 `Files` directory.
 
 
