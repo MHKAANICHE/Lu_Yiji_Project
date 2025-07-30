@@ -52,114 +52,6 @@ input int               InpMaxReplacements = 2;        // Max Replacements
 input string            InpWindowStart = "";           // Time Window Start (HH:MM:SS, empty=off)
 input string            InpWindowEnd   = "";           // Time Window End (HH:MM:SS, empty=off)
 
-//--- OOP Managers
-class TimeManager
-  {
-   public:
-      datetime openTime, closeTime, windowStart, windowEnd;
-      TimeManager() {}
-      void ParseTimes(string open, string close, string winStart, string winEnd)
-        {
-         openTime = ParseTime(open);
-         closeTime = ParseTime(close);
-         windowStart = ParseTime(winStart);
-         windowEnd = ParseTime(winEnd);
-        }
-      bool IsInTimeWindow(datetime now)
-        {
-         if(windowStart==0 || windowEnd==0) return false;
-         return (now >= windowStart && now <= windowEnd);
-        }
-      bool IsNewDay(datetime now)
-        {
-         static int lastDay = -1;
-         MqlDateTime dt; TimeToStruct(now, dt); int today = dt.day;
-         if(today != lastDay)
-           {
-            lastDay = today;
-            return true;
-           }
-         return false;
-        }
-  };
-
-class TradeManager
-  {
-   public:
-      int replacementsLeft;
-      bool tradeActive;
-      bool pendingOrderActive;
-      string magicNumber;
-      string symbol;
-      TradeManager() { tradeActive=false; pendingOrderActive=false; replacementsLeft=0; magicNumber=""; symbol=""; }
-      void Init(int maxRepl, string sym)
-        {
-         replacementsLeft = maxRepl;
-         tradeActive = false;
-         pendingOrderActive = false;
-         symbol = sym;
-         magicNumber = symbol+"_OneTradeEA";
-        }
-      void Reset(int maxRepl)
-        {
-         replacementsLeft = maxRepl;
-         tradeActive = false;
-         pendingOrderActive = false;
-        }
-      void OpenFirstTrade()
-        {
-         // Implement trade opening logic here if needed
-        }
-      void MonitorTrades()
-        {
-         // Implement trade monitoring logic here if needed
-        }
-  };
-
-class Logger
-  {
-   public:
-      Logger() {}
-      void Log(string msg)
-        {
-         Print("[OneTradeEA] ", msg);
-        }
-      // CSV logging
-      string csvFile;
-      void InitCSV(string filename)
-        {
-         csvFile = filename;
-         int handle = FileOpen(csvFile, FILE_READ|FILE_TXT);
-         if(handle < 0)
-           {
-            handle = FileOpen(csvFile, FILE_WRITE|FILE_TXT);
-            if(handle >= 0)
-              {
-               FileWrite(handle, "Date,Time,Symbol,TradeType,Lot,SL,TP,Result,Replacement,ErrorCode,Ticket");
-               FileClose(handle);
-              }
-           }
-         else
-           {
-            FileClose(handle);
-           }
-        }
-      void LogCSV(string date, string time, string symbol, string tradeType, double lot, double sl, double tp, string result, int replacement, string errorCode, ulong ticket)
-        {
-         int handle = FileOpen(csvFile, FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_READ|FILE_SHARE_WRITE|FILE_SHARE_READ|FILE_APPEND);
-         if(handle >= 0)
-           {
-            FileWrite(handle, date + "," + time + "," + symbol + "," + tradeType + "," + DoubleToString(lot,2) + "," + DoubleToString(sl,2) + "," + DoubleToString(tp,2) + "," + result + "," + IntegerToString((int)replacement) + "," + errorCode + "," + IntegerToString((int)ticket));
-            FileClose(handle);
-           }
-        }
-  };
-
-//--- Manager instances
-TimeManager timeManager;
-TradeManager tradeManager;
-Logger logger;
-
 // Define global object for coreEA
 COneTradeEA_Core coreEA_instance;
 #define coreEA coreEA_instance
@@ -199,15 +91,7 @@ void OnTick()
    // Open first trade at opening time (use full HH:MM:SS comparison)
    string nowStr = TimeToStr(TimeCurrent(), 1); // HH:MM:SS
    // Only open a new market order if there is no active trade and no pending order
-   bool hasPendingOrder = false;
-   for(int i=0; i<OrdersTotal(); i++) {
-      ulong ticket = OrderGetTicket(i);
-      if(OrderGetString(ORDER_SYMBOL) == Symbol() && OrderGetString(ORDER_COMMENT) == Symbol() + "_OneTradeEA") {
-         hasPendingOrder = true;
-         break;
-      }
-   }
-   if(nowStr == InpOpenTime && !coreEA.IsTradeActive() && !hasPendingOrder)
+   if(nowStr == InpOpenTime && !coreEA.IsTradeActive() && !coreEA.HasPendingOrder())
    {
       coreEA.OpenFirstTrade();
    }
@@ -231,9 +115,9 @@ datetime ParseTime(string t)
       Print("ERROR: Time string '", t, "' is not in HH:MM:SS format.");
       return 0;
    }
-   int h = StringToInteger(StringSubstr(t,0,2));
-   int m = StringToInteger(StringSubstr(t,3,2));
-   int s = StringToInteger(StringSubstr(t,6,2));
+   long h = StringToInteger(StringSubstr(t,0,2));
+   long m = StringToInteger(StringSubstr(t,3,2));
+   long s = StringToInteger(StringSubstr(t,6,2));
    if(h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59) {
       Print("ERROR: Time string '", t, "' has invalid values.");
       return 0;
