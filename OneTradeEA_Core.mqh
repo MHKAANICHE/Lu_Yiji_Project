@@ -53,6 +53,42 @@ private:
    bool timeWindowEnabled;
 
 public:
+   // Generate a unique CSV file name for logging
+   string GenerateCSVFileName()
+   {
+      string base = m_symbol + "_" + TimeToString(TimeCurrent(), TIME_DATE) + "_" + IntegerToString(MathRand());
+      return base + ".csv";
+   }
+
+   // Initialize the CSV file with header if it does not exist
+   void InitCSV(string filename)
+   {
+      int handle = FileOpen(filename, FILE_READ|FILE_TXT);
+      if(handle < 0)
+      {
+         handle = FileOpen(filename, FILE_WRITE|FILE_TXT);
+         if(handle >= 0)
+         {
+            FileWrite(handle, "Date,Time,Symbol,TradeType,Lot,SL,TP,Result,Replacement,ErrorCode,Ticket");
+            FileClose(handle);
+         }
+      }
+      else
+      {
+         FileClose(handle);
+      }
+   }
+
+   // Log a trade event to the CSV file
+   void LogCSV(string date, string time, string symbol, string tradeType, double lot, double sl, double tp, string result, int replacement, string errorCode, ulong ticket)
+   {
+      int handle = FileOpen(csvFileName, FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_READ|FILE_SHARE_WRITE|FILE_SHARE_READ|8); // 8 = FILE_APPEND
+      if(handle >= 0)
+      {
+         FileWrite(handle, date + "," + time + "," + symbol + "," + tradeType + "," + DoubleToString(lot,2) + "," + DoubleToString(sl,2) + "," + DoubleToString(tp,2) + "," + result + "," + IntegerToString((int)replacement) + "," + errorCode + "," + IntegerToString((int)ticket));
+         FileClose(handle);
+      }
+   }
    // Returns true if a pending order for this symbol/magic is present
    bool HasPendingOrder()
    {
@@ -112,40 +148,6 @@ public:
       timeWindowEnabled = false;
       csvFileName = GenerateCSVFileName();
       InitCSV(csvFileName);
-   }
-
-   string GenerateCSVFileName()
-   {
-      string base = m_symbol + "_" + TimeToString(TimeCurrent(), TIME_DATE) + "_" + IntegerToString(MathRand());
-      return base + ".csv";
-   }
-
-   void InitCSV(string filename)
-   {
-      int handle = FileOpen(filename, FILE_READ|FILE_TXT);
-      if(handle < 0)
-      {
-         handle = FileOpen(filename, FILE_WRITE|FILE_TXT);
-         if(handle >= 0)
-         {
-            FileWrite(handle, "Date,Time,Symbol,TradeType,Lot,SL,TP,Result,Replacement,ErrorCode,Ticket");
-            FileClose(handle);
-         }
-      }
-      else
-      {
-         FileClose(handle);
-      }
-   }
-
-   void LogCSV(string date, string time, string symbol, string tradeType, double lot, double sl, double tp, string result, int replacement, string errorCode, ulong ticket)
-   {
-      int handle = FileOpen(csvFileName, FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_READ|FILE_SHARE_WRITE|FILE_SHARE_READ|8); // 8 = FILE_APPEND
-      if(handle >= 0)
-      {
-         FileWrite(handle, date + "," + time + "," + symbol + "," + tradeType + "," + DoubleToString(lot,2) + "," + DoubleToString(sl,2) + "," + DoubleToString(tp,2) + "," + result + "," + IntegerToString((int)replacement) + "," + errorCode + "," + IntegerToString((int)ticket));
-         FileClose(handle);
-      }
    }
 
    datetime ParseTime(string t)
@@ -282,6 +284,7 @@ public:
       currentTrade.ticket = result.order;
       // Log successful order open with calculated SL/TP in price
       LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), lotSize, sl, tp, "OPEN", currentTrade.score, "", result.order);
+
    }
 
    void MonitorTrades()
@@ -320,70 +323,72 @@ public:
                tradeActive = true;
                pendingOrderActive = false;
             }
-            // SL hit
-            if(sl > 0 && ((tradeMode == ORDER_TYPE_BUY && priceCurrent <= sl) || (tradeMode == ORDER_TYPE_SELL && priceCurrent >= sl)))
+            Print("    timeWindow=", IsInTimeWindow(TimeCurrent()));
+
+            // Draw vertical line at SL hit
+            string vline_name = "SL_HIT_" + IntegerToString(ticket) + "_" + TimeToString(TimeCurrent(), TIME_SECONDS);
+            datetime vline_time = TimeCurrent();
+            ObjectCreate(0, vline_name, OBJ_VLINE, 0, vline_time, 0);
+            ObjectSetInteger(0, vline_name, OBJPROP_COLOR, clrRed);
+            ObjectSetInteger(0, vline_name, OBJPROP_WIDTH, 2);
+
+            if(PositionCloseHelper(ticket))
             {
-               Print("[OneTradeEA][DEBUG] SL HIT: priceCurrent=", priceCurrent, " sl=", sl, " tradeMode=", tradeMode);
-               Print("[OneTradeEA][DEBUG] State BEFORE pending order logic:");
+               LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "SL", currentTrade.score, "", ticket);
+            }
+            else
+            {
+               LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "SL_FAIL", currentTrade.score, "CLOSE", ticket);
+            }
+            // Only place replacement if not in time window, score > 0, and no pending order exists
+            tradeActive = false;
+            bool hasPending = HasPendingOrder();
+            Print("[OneTradeEA][DEBUG] HasPendingOrder() result: ", hasPending);
+            if(currentTrade.score > 0 && !IsInTimeWindow(TimeCurrent()) && !hasPending)
+            {
+               Print("[OneTradeEA][DEBUG] Condition met for pending order: score > 0, not in time window, no pending order exists.");
+               Print("[OneTradeEA][DEBUG] Attempting to place pending order after SL. score=", currentTrade.score-1);
+               currentTrade.score--;
+               currentTrade.comment = "REPLACEMENT_" + IntegerToString(currentTrade.score);
+               pendingOrderActive = true;
+               // Use original entry/SL for pending order
+               OpenPendingOrder(currentTrade.entryPrice, currentTrade.sl);
+               Print("[OneTradeEA][DEBUG] State AFTER pending order logic:");
                Print("    tradeActive=", tradeActive);
                Print("    pendingOrderActive=", pendingOrderActive);
                Print("    score=", currentTrade.score);
-               Print("    timeWindow=", IsInTimeWindow(TimeCurrent()));
-               if(PositionCloseHelper(ticket))
-               {
-                  LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "SL", currentTrade.score, "", ticket);
-               }
-               else
-               {
-                  LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "SL_FAIL", currentTrade.score, "CLOSE", ticket);
-               }
-               // Only place replacement if not in time window, score > 0, and no pending order exists
-               tradeActive = false;
-               bool hasPending = HasPendingOrder();
-               Print("[OneTradeEA][DEBUG] HasPendingOrder() result: ", hasPending);
-               if(currentTrade.score > 0 && !IsInTimeWindow(TimeCurrent()) && !hasPending)
-               {
-                  Print("[OneTradeEA][DEBUG] Condition met for pending order: score > 0, not in time window, no pending order exists.");
-                  Print("[OneTradeEA][DEBUG] Attempting to place pending order after SL. score=", currentTrade.score-1);
-                  currentTrade.score--;
-                  currentTrade.comment = "REPLACEMENT_" + IntegerToString(currentTrade.score);
-                  pendingOrderActive = true;
-                  // Use original entry/SL for pending order
-                  OpenPendingOrder(currentTrade.entryPrice, currentTrade.sl);
-                  Print("[OneTradeEA][DEBUG] State AFTER pending order logic:");
-                  Print("    tradeActive=", tradeActive);
-                  Print("    pendingOrderActive=", pendingOrderActive);
-                  Print("    score=", currentTrade.score);
-               }
-               else
-               {
-                  Print("[OneTradeEA][DEBUG] Condition NOT met for pending order. State:");
-                  Print("    score=", currentTrade.score);
-                  Print("    pendingOrderActive=", pendingOrderActive);
-                  Print("    timeWindow=", IsInTimeWindow(TimeCurrent()));
-                  Print("[OneTradeEA][DEBUG] Pending order NOT placed after SL.");
-                  if(hasPending)
-                     Print("[OneTradeEA][DEBUG] Pending order block is activated: HasPendingOrder()=true");
-               }
-               return; // Only handle one position per tick
             }
-            // TP hit
-            if(tp > 0 && ((tradeMode == ORDER_TYPE_BUY && priceCurrent >= tp) || (tradeMode == ORDER_TYPE_SELL && priceCurrent <= tp)))
+            else
             {
-               Print("[OneTradeEA][DEBUG] Position closed at TP. tradeActive=", tradeActive, " pendingOrderActive=", pendingOrderActive, " score=", currentTrade.score);
-               if(PositionCloseHelper(ticket))
-               {
-                  LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "TP", currentTrade.score, "", ticket);
-               }
-               else
-               {
-                  LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "TP_FAIL", currentTrade.score, "CLOSE", ticket);
-               }
-               tradeActive = false;
-               currentTrade.score = 0;
-               pendingOrderActive = false;
-               return;
+               Print("[OneTradeEA][DEBUG] Condition NOT met for pending order. State:");
+               Print("    score=", currentTrade.score);
+               Print("    pendingOrderActive=", pendingOrderActive);
+               Print("    timeWindow=", IsInTimeWindow(TimeCurrent()));
+               Print("[OneTradeEA][DEBUG] Pending order NOT placed after SL.");
+               if(hasPending)
+                  Print("[OneTradeEA][DEBUG] Pending order block is activated: HasPendingOrder()=true");
             }
+            return; // Only handle one position per tick
+         }
+         // TP hit
+         double tp = PositionGetDouble(POSITION_TP);
+         double sl = PositionGetDouble(POSITION_SL);
+         double priceCurrent = (tradeMode==ORDER_TYPE_BUY) ? SymbolInfoDouble(m_symbol, SYMBOL_BID) : SymbolInfoDouble(m_symbol, SYMBOL_ASK);
+         if(tp > 0 && ((tradeMode == ORDER_TYPE_BUY && priceCurrent >= tp) || (tradeMode == ORDER_TYPE_SELL && priceCurrent <= tp)))
+         {
+            Print("[OneTradeEA][DEBUG] Position closed at TP. tradeActive=", tradeActive, " pendingOrderActive=", pendingOrderActive, " score=", currentTrade.score);
+            if(PositionCloseHelper(ticket))
+            {
+               LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "TP", currentTrade.score, "", ticket);
+            }
+            else
+            {
+               LogCSV(TimeToString(TimeCurrent(), TIME_DATE), TimeToString(TimeCurrent(), TIME_SECONDS), m_symbol, (tradeMode==ORDER_TYPE_BUY?"BUY":"SELL"), currentTrade.lot, sl, tp, "TP_FAIL", currentTrade.score, "CLOSE", ticket);
+            }
+            tradeActive = false;
+            currentTrade.score = 0;
+            pendingOrderActive = false;
+            return;
          }
       }
       // If no position found, set tradeActive to false
