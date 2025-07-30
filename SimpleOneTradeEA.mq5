@@ -1,66 +1,47 @@
-//+------------------------------------------------------------------+
-//| SimpleOneTradeEA.mq5                                             |
-//| A simple one-trade EA for backtesting, with replacement logic    |
-//| Only BUY entries, fixed TP/SL, OOP, and clear state/logic loops  |
-//+------------------------------------------------------------------+
+// SimpleOneTradeEA.mq5
+// A simple one-trade EA for backtesting, with replacement logic and clear state/logic loops
 
-#property copyright "GitHub Copilot"
-#property version   "1.00"
+#property copyright   "GitHub Copilot"
+#property version     "1.00"
 #property strict
 
-//--- Input parameters
-input double Lots = 0.1;
-input int    Slippage = 5;
-input int    Magic = 12345;
+input double Lots      = 0.1;
+input int    Slippage  = 5;
+input int    Magic     = 12345;
 
-
-//--- Fixed SL/TP in pips
 #define FIXED_SL_PIPS 100
 #define FIXED_TP_PIPS 200
 
-//--- Helper to get pip size for the current symbol
 double GetPipSize() {
    int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
-   double pip = 0.0;
    if(digits == 3 || digits == 5)
-      pip = 0.00010;
-   else if(digits == 2 || digits == 4)
-      pip = 0.01;
-   else
-      pip = SymbolInfoDouble(_Symbol, SYMBOL_POINT); // fallback
-   return pip;
+      return 0.00010;
+   if(digits == 2 || digits == 4)
+      return 0.01;
+   return SymbolInfoDouble(_Symbol, SYMBOL_POINT); // fallback
 }
 
-//--- Helper struct to store first entry parameters
+// Helper struct to store first entry parameters
 class FirstEntryParams {
 public:
-   double entryPrice;
-   double sl;
-   double tp;
-   double lot;
-   FirstEntryParams() { entryPrice=0; sl=0; tp=0; lot=0; }
+   double entryPrice, sl, tp, lot;
+   FirstEntryParams() { Reset(); }
    void Save(double price, double sl_, double tp_, double lot_) {
       entryPrice = price; sl = sl_; tp = tp_; lot = lot_;
    }
    void Reset() { entryPrice=0; sl=0; tp=0; lot=0; }
 };
 
-//--- Main EA class
+// Main EA class
 class SimpleOneTradeEA {
-   double lastEntryPrice;
-   double lastSL;
-   double lastTP;
-   double lastClosePrice;
+   double lastEntryPrice, lastSL, lastTP, lastClosePrice;
    bool pendingBacktestCloseCheck;
-private:
-   bool flagPlaceFirstEntry;
-   bool flagPlaceReplacement;
-   int replacementScore;
-   int replacementScoreMax;
+   bool flagPlaceFirstEntry, flagPlaceReplacement;
+   int replacementScore, replacementScoreMax;
    FirstEntryParams firstEntry;
-   ulong lastTicket;
-   ulong openPositionTicket; // Track the ticket of the opened position
+   ulong lastTicket, openPositionTicket;
 public:
+   ulong lastClosedTicket;
    SimpleOneTradeEA() {
       flagPlaceFirstEntry = true;
       flagPlaceReplacement = false;
@@ -70,7 +51,6 @@ public:
       openPositionTicket = 0;
       lastClosedTicket = 0;
    }
-   ulong lastClosedTicket; // Track last closed position ticket for backtest SL/TP detection
 
    void OnInit() {
       flagPlaceFirstEntry = true;
@@ -103,13 +83,9 @@ public:
          }
          if(pendingBacktestCloseCheck && !hasPosition) {
             Print("[DEBUG] [Backtest] Using price-based SL/TP detection technique");
-            string closeReason = "OTHER";
-            PrintFormat("[DEBUG] [Backtest] Price-based SL/TP check: entry=%.5f, sl=%.5f, tp=%.5f, close=%.5f", lastEntryPrice, lastSL, lastTP, lastClosePrice);
-            if(lastClosePrice <= lastEntryPrice) closeReason = "SL";
-            else if(lastClosePrice > lastEntryPrice) closeReason = "TP";
-            PrintFormat("[DEBUG] [Backtest] Inferred close reason: %s", closeReason);
-            OnPositionClosed(closeReason);
-            pendingBacktestCloseCheck = false;
+           string closeReason = DetectCloseReason(lastEntryPrice, lastSL, lastTP, lastClosePrice);
+           OnPositionClosed(closeReason);
+           pendingBacktestCloseCheck = false;
          }
       }
       #endif
@@ -119,6 +95,23 @@ public:
       }
       // Only run logic loop if no position is open
       LogicLoop();
+   }
+   // Detect close reason based on price (for backtest SL/TP detection)
+   string DetectCloseReason(double entry, double sl, double tp, double close) {
+      PrintFormat("[DEBUG] [Backtest] Price-based SL/TP check: entry=%.5f, sl=%.5f, tp=%.5f, close=%.5f", entry, sl, tp, close);
+      if(IsClosedBySL(entry, sl, tp, close)) return "SL";
+      if(IsClosedByTP(entry, sl, tp, close)) return "TP";
+      return "OTHER";
+   }
+
+   // Returns true if the position is closed by SL (customizable logic)
+   bool IsClosedBySL(double entry, double sl, double tp, double close) {
+      return (close <= entry); // For BUY
+   }
+
+   // Returns true if the position is closed by TP (customizable logic)
+   bool IsClosedByTP(double entry, double sl, double tp, double close) {
+      return (close > entry); // For BUY
    }
 
    bool CheckForActivePosition() {
@@ -138,8 +131,7 @@ public:
    }
 
 
-//--- Called on every trade transaction (robust for SL/TP detection)
-// This must be a global function for MetaTrader to call it
+// Called on every trade transaction (robust for SL/TP detection)
 void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest &request, const MqlTradeResult &result) {
     Print("[DEBUG] OnTradeTransaction called");
     PrintFormat("[DEBUG] Transaction type: %d", trans.type);
@@ -147,7 +139,6 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
         trans.deal, trans.order, HistoryDealGetString(trans.deal, DEAL_SYMBOL), HistoryDealGetInteger(trans.deal, DEAL_MAGIC),
         HistoryDealGetDouble(trans.deal, DEAL_PRICE), HistoryDealGetDouble(trans.deal, DEAL_VOLUME),
         HistoryDealGetInteger(trans.deal, DEAL_ENTRY), HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID));
-    // Only process closed positions for this EA and symbol and ticket
     if(trans.type == TRADE_TRANSACTION_DEAL_ADD) {
         ulong deal = trans.deal;
         string dealSymbol = HistoryDealGetString(deal, DEAL_SYMBOL);
@@ -158,13 +149,20 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
         string reasonStr = "OTHER";
         if(reason == DEAL_REASON_SL) reasonStr = "SL";
         else if(reason == DEAL_REASON_TP) reasonStr = "TP";
+        if(reasonStr == "OTHER" && dealSymbol == _Symbol && dealMagic == Magic && entryType == DEAL_ENTRY_OUT && positionId == ea.openPositionTicket && ea.openPositionTicket != 0) {
+            double entry = ea.firstEntry.entryPrice;
+            double sl = ea.firstEntry.sl;
+            double tp = ea.firstEntry.tp;
+            double close = HistoryDealGetDouble(deal, DEAL_PRICE);
+            reasonStr = ea.DetectCloseReason(entry, sl, tp, close);
+        }
         PrintFormat("[DEBUG] DEAL_ADD: deal=%d, symbol=%s, magic=%d, entryType=%d, positionId=%d, openPositionTicket=%d, reason=%d (%s)", deal, dealSymbol, dealMagic, entryType, positionId, ea.openPositionTicket, reason, reasonStr);
         if(dealSymbol == _Symbol && dealMagic == Magic) {
-            if(entryType == DEAL_ENTRY_OUT && positionId == ea.openPositionTicket && ea.openPositionTicket != 0) { // Only closing deals for our ticket
+            if(entryType == DEAL_ENTRY_OUT && positionId == ea.openPositionTicket && ea.openPositionTicket != 0) {
                 PrintFormat("[DEBUG] Position closed detected. Reason: %s (code=%d)", reasonStr, reason);
                 ea.OnPositionClosed(reasonStr);
                 PrintFormat("[DEBUG] After OnPositionClosed: flagPlaceFirstEntry=%d, flagPlaceReplacement=%d", ea.flagPlaceFirstEntry, ea.flagPlaceReplacement);
-                ea.openPositionTicket = 0; // Reset ticket after closure
+                ea.openPositionTicket = 0;
             } else {
                 PrintFormat("[DEBUG] Not our closing deal or not matching ticket. entryType=%d, positionId=%d, openPositionTicket=%d", entryType, positionId, ea.openPositionTicket);
             }
